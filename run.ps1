@@ -7,18 +7,23 @@ Set-Location $Root
 
 # Load token from .env
 $envFile = Join-Path $Root ".env"
-if (Test-Path $envFile) {
-    Get-Content $envFile | ForEach-Object {
-        $line = $_.Trim()
-        if ($line -and $line -notlike "#*" -and $line -like "*=*") {
-            $key, $value = $line.Split("=", 2)
-            Set-Item -Path "env:$key" -Value $value.Trim('"', "'")
+
+function Load-Env {
+    if (Test-Path $envFile) {
+        Get-Content $envFile | ForEach-Object {
+            $line = $_.Trim()
+            if ($line -and $line -notlike "#*" -and $line -like "*=*") {
+                $key, $value = $line.Split("=", 2)
+                Set-Item -Path "env:$key" -Value $value.Trim('"', "'")
+            }
         }
     }
+    if ($env:DC_TOKEN) {
+        $env:DISCORD_BOT_TOKEN = $env:DC_TOKEN
+    }
 }
-if ($env:DC_TOKEN -and -not $env:DISCORD_BOT_TOKEN) {
-    $env:DISCORD_BOT_TOKEN = $env:DC_TOKEN
-}
+
+Load-Env
 
 if (-not $env:DISCORD_BOT_TOKEN) {
     Write-Host "Error: DISCORD_BOT_TOKEN is not set. Add DC_TOKEN to .env or set DISCORD_BOT_TOKEN."
@@ -43,6 +48,7 @@ Get-ChildItem -Path "bot" -Recurse -Include "*.py" |
     ForEach-Object { $fileTimes[$_.FullName] = $_.LastWriteTime }
 
 while ($true) {
+    Load-Env
     Write-Host "[run] Starting bot..."
     $process = Start-Process -FilePath "python" -ArgumentList @("-u", "bot/main.py") -NoNewWindow -PassThru
     Write-Host "[run] Bot started (PID: $($process.Id))"

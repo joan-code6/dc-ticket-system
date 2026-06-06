@@ -19,10 +19,10 @@ def _load_dotenv():
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip("\"'")
-        os.environ.setdefault(key, value)
-    # Map DC_TOKEN to DISCORD_BOT_TOKEN
+        os.environ[key] = value
+    # Map DC_TOKEN to DISCORD_BOT_TOKEN unconditionally
     dc_token = os.environ.get("DC_TOKEN")
-    if dc_token and not os.environ.get("DISCORD_BOT_TOKEN"):
+    if dc_token:
         os.environ["DISCORD_BOT_TOKEN"] = dc_token
 
 intents = discord.Intents.default()
@@ -64,4 +64,6 @@ if __name__ == "__main__":
     token = os.getenv("DISCORD_BOT_TOKEN")
     if not token:
         raise ValueError("DISCORD_BOT_TOKEN environment variable is not set! Add DC_TOKEN to .env or set DISCORD_BOT_TOKEN.")
+    print(f"Token loaded (first 10 chars): {token[:10]}...")
+    print(f"Bot ID from token: {token.split('.')[0]}")
     bot.run(token)

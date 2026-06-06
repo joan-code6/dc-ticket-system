@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 if [ -f ".env" ]; then
     export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs)
 fi
-if [ -n "${DC_TOKEN:-}" ] && [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
+if [ -n "${DC_TOKEN:-}" ]; then
     export DISCORD_BOT_TOKEN="$DC_TOKEN"
 fi
 
@@ -34,6 +34,12 @@ MARKER=$(mktemp /tmp/ticket-bot-marker.XXXXXX)
 trap 'rm -f "$MARKER"' EXIT SIGINT SIGTERM
 
 while true; do
+    # Reload .env on each restart in case token changed
+    if [ -f ".env" ]; then
+        export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs)
+    fi
+    if [ -n "${DC_TOKEN:-}" ]; then
+        export DISCORD_BOT_TOKEN="$DC_TOKEN"
     touch "$MARKER"
     $PYTHON -u bot/main.py &
     BOT_PID=$!

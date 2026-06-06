@@ -8,7 +8,7 @@ import discord
 if TYPE_CHECKING:
     from utils.database import Database
 
-MAX_FILE_SIZE = 25 * 1024 * 1024
+DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=120)
 
 
 async def archive_attachments(
@@ -25,22 +25,29 @@ async def archive_attachments(
 
     replacements: Dict[str, str] = {}
     count = 0
+    failed = 0
 
-    async with aiohttp.ClientSession() as session:
+    async with aiohttp.ClientSession(timeout=DOWNLOAD_TIMEOUT) as session:
         async for msg in channel.history(limit=None, oldest_first=True):
             for att in msg.attachments:
-                if att.size > MAX_FILE_SIZE:
-                    continue
+                filename = att.filename or att.url.split("/")[-1].split("?")[0]
 
                 try:
                     async with session.get(att.url) as resp:
                         if resp.status != 200:
+                            print(f"  [archive] HTTP {resp.status} downloading: {filename}")
+                            failed += 1
                             continue
                         data = await resp.read()
-                except Exception:
+                except asyncio.TimeoutError:
+                    print(f"  [archive] Timed out downloading: {filename}")
+                    failed += 1
+                    continue
+                except Exception as e:
+                    print(f"  [archive] Download failed: {filename} ({e})")
+                    failed += 1
                     continue
 
-                filename = att.filename or att.url.split("/")[-1].split("?")[0]
                 try:
                     discord_file = discord.File(io.BytesIO(data), filename=filename)
                     context = f"**Ticket #{ticket_id}**" if ticket_id else "Ticket"
@@ -50,17 +57,29 @@ async def archive_attachments(
                         content=f"{context} — `{filename}`",
                         file=discord_file,
                     )
-                except Exception:
+                except discord.HTTPException as e:
+                    if e.code == 40005:
+                        print(f"  [archive] File too large for upload: {filename} ({att.size} bytes)")
+                    else:
+                        print(f"  [archive] Upload failed: {filename} ({e})")
+                    failed += 1
+                    continue
+                except Exception as e:
+                    print(f"  [archive] Upload failed: {filename} ({e})")
+                    failed += 1
                     continue
 
                 if sent.attachments:
                     new_url = sent.attachments[0].url
                     replacements[att.url] = new_url
                     count += 1
+                    print(f"  [archive] OK: {filename} ({att.size} bytes)")
 
                 await asyncio.sleep(0.5)
 
     if replacements:
         await db.update_transcript_attachment_urls(ticket_id, replacements)
 
+    if failed:
+        print(f"  [archive] Summary: {count} archived, {failed} failed")
     return count
