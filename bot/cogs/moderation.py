@@ -8,6 +8,8 @@ import asyncio
 if TYPE_CHECKING:
     from main import TicketBot
 
+from utils.archive import archive_attachments
+
 
 class ModerationCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
@@ -175,6 +177,13 @@ class ModerationCog(commands.Cog):
 
         await interaction.followup.send(f"Ticket closed. Reason: {reason or 'No reason provided.'}")
         await self._refresh_stats(interaction.guild)
+
+        archive_channel_id = self.bot.config_manager.get_archive_channel()
+        if archive_channel_id:
+            await archive_attachments(
+                self.bot, channel, ticket["id"], self.bot.db, archive_channel_id,
+                ticket_name=f"#{ticket['id']}",
+            )
 
         await interaction.followup.send("This channel will be deleted in 5 seconds...")
         await asyncio.sleep(5)

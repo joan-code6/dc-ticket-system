@@ -125,6 +125,24 @@ class Database:
         )
         await self.conn.commit()
 
+    async def update_transcript_attachment_urls(self, ticket_id: int, url_map: Dict[str, str]):
+        async with self.conn.execute(
+            "SELECT id, attachments_json FROM transcript_messages WHERE ticket_id = ?",
+            (ticket_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+
+        for row in rows:
+            attachments = json.loads(row["attachments_json"])
+            updated = [url_map.get(url, url) for url in attachments]
+            if updated != attachments:
+                await self.conn.execute(
+                    "UPDATE transcript_messages SET attachments_json = ? WHERE id = ?",
+                    (json.dumps(updated), row["id"])
+                )
+
+        await self.conn.commit()
+
     async def get_transcript_messages(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM transcript_messages WHERE ticket_id = ? ORDER BY timestamp ASC",

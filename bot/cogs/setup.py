@@ -75,6 +75,15 @@ class SetupCog(commands.Cog):
         self.bot.config_manager.set_stats_channel(channel.id, msg1.id, msg2.id)
         await interaction.response.send_message(f"Stats set up in {channel.mention}.", ephemeral=True)
 
+    @setup_group.command(name="archive", description="Set the channel for archiving ticket attachments")
+    @app_commands.checks.has_permissions(administrator=True)
+    async def setup_archive(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        self.bot.config_manager.set_archive_channel(channel.id)
+        await interaction.response.send_message(
+            f"Archive channel set to {channel.mention}. Ticket attachments will be saved here before channel deletion.",
+            ephemeral=True,
+        )
+
     @commands.command(name="ping")
     async def ping(self, ctx: commands.Context):
         await ctx.send("Pong!")

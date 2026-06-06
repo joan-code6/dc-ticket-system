@@ -8,7 +8,8 @@ DEFAULT_CONFIG = {
     "categories": {},
     "stats_channel_id": None,
     "stats_message_id": None,
-    "stats_leaderboard_message_id": None
+    "stats_leaderboard_message_id": None,
+    "archive_channel_id": None
 }
 
 
@@ -83,6 +84,15 @@ class ConfigManager:
 
     def get_stats_leaderboard_message(self) -> Optional[int]:
         return self.config.get("stats_leaderboard_message_id")
+
+    def get_archive_channel(self) -> Optional[int]:
+        return self.config.get("archive_channel_id")
+
+    def set_archive_channel(self, channel_id: int):
+        cfg = self.config
+        cfg["archive_channel_id"] = channel_id
+        self._save(cfg)
+        self._config = cfg
 
     def delete_category(self, name: str):
         cfg = self.config

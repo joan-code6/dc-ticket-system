@@ -3,9 +3,12 @@ from discord import ui
 from discord.ext import commands
 from typing import TYPE_CHECKING
 import json
+import asyncio
 
 if TYPE_CHECKING:
     from main import TicketBot
+
+from utils.archive import archive_attachments
 
 
 class TicketCategorySelect(ui.Select):
@@ -92,7 +95,7 @@ class TicketCategorySelect(ui.Select):
             for q, a in answers.items():
                 embed.add_field(name=q, value=a or "No answer", inline=False)
 
-        await channel.send(content=f"{role.mention} {creator.mention}", embed=embed)
+        await channel.send(content=f"{role.mention} {creator.mention}", embed=embed, view=TicketActionView())
         await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
 
         # Update stats
@@ -126,6 +129,95 @@ class TicketQuestionsModal(ui.Modal):
         await self.on_submit_callback(interaction, self.category, answers)
 
 
+class TicketActionView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="ticket_close_button")
+    async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
+        bot: TicketBot = interaction.client
+        ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            return
+        if ticket["status"] == "closed":
+            await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        channel = interaction.channel
+        async for msg in channel.history(limit=None, oldest_first=True):
+            attachments = [a.url for a in msg.attachments]
+            await bot.db.add_transcript_message(
+                ticket["id"], msg.id, msg.author.id, msg.author.display_name,
+                msg.content, msg.created_at, attachments
+            )
+
+        await bot.db.close_ticket(ticket["id"])
+        await bot.db.add_ticket_log(ticket["id"], "close", interaction.user.id)
+
+        stats_cog = bot.get_cog("StatsCog")
+        if stats_cog:
+            await stats_cog.update_stats(interaction.guild)
+
+        archive_channel_id = bot.config_manager.get_archive_channel()
+        if archive_channel_id:
+            await archive_attachments(
+                bot, channel, ticket["id"], bot.db, archive_channel_id,
+                ticket_name=f"#{ticket['id']}",
+            )
+
+        await interaction.followup.send("Ticket closed and transcript saved.", ephemeral=True)
+        await channel.send("This channel will be deleted in 5 seconds...")
+        await asyncio.sleep(5)
+        await channel.delete(reason=f"Ticket closed by {interaction.user}")
+
+    @ui.button(label="Assign to Me", style=discord.ButtonStyle.green, custom_id="ticket_assign_button")
+    async def assign_to_me(self, interaction: discord.Interaction, button: ui.Button):
+        bot: TicketBot = interaction.client
+        ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            return
+        if ticket["status"] == "closed":
+            await interaction.response.send_message("This ticket is closed.", ephemeral=True)
+            return
+
+        assigned = json.loads(ticket["assigned_ids"])
+        if interaction.user.id in assigned:
+            await interaction.response.send_message("You are already assigned to this ticket.", ephemeral=True)
+            return
+
+        assigned.append(interaction.user.id)
+        await bot.db.update_ticket_assigned(ticket["id"], assigned)
+        ticket["assigned_ids"] = json.dumps(assigned)
+        await bot.db.add_ticket_log(ticket["id"], "claim", interaction.user.id)
+
+        channel = interaction.channel
+        await channel.set_permissions(interaction.user, view_channel=True, send_messages=True)
+
+        async for msg in channel.history(limit=50):
+            if msg.embeds and msg.embeds[0].title and msg.embeds[0].title.startswith("Ticket #"):
+                embed = msg.embeds[0]
+                mentions = " ".join(f"<@{uid}>" for uid in assigned)
+                for i, field in enumerate(embed.fields):
+                    if field.name == "Assigned":
+                        embed.set_field_at(i, name="Assigned", value=mentions, inline=False)
+                        try:
+                            await msg.edit(embed=embed)
+                        except discord.HTTPException:
+                            pass
+                        break
+                break
+
+        stats_cog = bot.get_cog("StatsCog")
+        if stats_cog:
+            await stats_cog.update_stats(interaction.guild)
+
+        await interaction.response.send_message(f"{interaction.user.mention} has been assigned to this ticket.")
+
+
 class CreateTicketButton(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -148,6 +240,7 @@ class TicketsCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(CreateTicketButton())
+        self.bot.add_view(TicketActionView())
         categories = self.bot.config_manager.get_categories()
         if categories:
             self.bot.add_view(TicketCategoryView(categories))
