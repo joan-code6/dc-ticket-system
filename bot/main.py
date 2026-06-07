@@ -46,6 +46,7 @@ class TicketBot(commands.Bot):
         await self.load_extension("cogs.moderation")
         await self.load_extension("cogs.stats")
         await self.load_extension("cogs.transcripts")
+        await self.load_extension("cogs.reminders")
         await self.tree.sync()
 
     async def on_ready(self):

@@ -33,6 +33,7 @@ class TicketCategorySelect(ui.Select):
             return
 
         if not questions:
+            await interaction.response.defer(ephemeral=True)
             await self.create_ticket(interaction, category, {})
             return
 
@@ -43,14 +44,14 @@ class TicketCategorySelect(ui.Select):
         bot: TicketBot = interaction.client
         cfg = bot.config_manager.get_category(category)
         if not cfg:
-            await interaction.response.send_message("Category configuration missing.", ephemeral=True)
+            await interaction.followup.send("Category configuration missing.", ephemeral=True)
             return
 
         guild = interaction.guild
         creator = interaction.user
         discord_category = guild.get_channel(cfg["discord_category_id"])
         if not discord_category:
-            await interaction.response.send_message("Ticket category channel not found.", ephemeral=True)
+            await interaction.followup.send("Ticket category channel not found.", ephemeral=True)
             return
 
         # Role setup
@@ -96,7 +97,7 @@ class TicketCategorySelect(ui.Select):
                 embed.add_field(name=q, value=a or "No answer", inline=False)
 
         await channel.send(content=f"{role.mention} {creator.mention}", embed=embed, view=TicketActionView())
-        await interaction.response.send_message(f"Ticket created: {channel.mention}", ephemeral=True)
+        await interaction.followup.send(f"Ticket created: {channel.mention}", ephemeral=True)
 
         # Update stats
         stats_cog = bot.get_cog("StatsCog")
@@ -126,6 +127,7 @@ class TicketQuestionsModal(ui.Modal):
         for child in self.children:
             if isinstance(child, ui.TextInput):
                 answers[str(child.label)] = child.value
+        await interaction.response.defer(ephemeral=True)
         await self.on_submit_callback(interaction, self.category, answers)
 
 

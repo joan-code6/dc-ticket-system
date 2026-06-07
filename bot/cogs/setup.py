@@ -48,13 +48,17 @@ class SetupCog(commands.Cog):
     @setup_group.command(name="panel", description="Send the ticket creation panel")
     @app_commands.checks.has_permissions(administrator=True)
     async def setup_panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        from cogs.tickets import CreateTicketButton
+        from cogs.tickets import TicketCategoryView
+        categories = self.bot.config_manager.get_categories()
+        if not categories:
+            await interaction.response.send_message("No ticket categories configured. Use `/setup category` first.", ephemeral=True)
+            return
         embed = discord.Embed(
             title="Support Tickets",
-            description="Click the button below to create a ticket.",
+            description="Select a category below to create a ticket.",
             color=discord.Color.green()
         )
-        await channel.send(embed=embed, view=CreateTicketButton())
+        await channel.send(embed=embed, view=TicketCategoryView(categories))
         await interaction.response.send_message(f"Panel sent to {channel.mention}.", ephemeral=True)
 
     @setup_group.command(name="stats", description="Set the stats channel")
@@ -66,13 +70,19 @@ class SetupCog(commands.Cog):
         await msg1.pin()
 
         # Leaderboard message
-        from cogs.stats import StatsLeaderboardView
-        view = StatsLeaderboardView(self.bot)
-        embed2 = await view.refresh(interaction.guild)
-        msg2 = await channel.send(embed=embed2, view=view)
+        from cogs.stats import StatsLeaderboardView, ClaimsLeaderboardView
+        lb_view = StatsLeaderboardView(self.bot)
+        embed2 = await lb_view.refresh(interaction.guild)
+        msg2 = await channel.send(embed=embed2, view=lb_view)
         await msg2.pin()
 
-        self.bot.config_manager.set_stats_channel(channel.id, msg1.id, msg2.id)
+        # Claims leaderboard message
+        claims_lb_view = ClaimsLeaderboardView(self.bot)
+        embed3 = await claims_lb_view.refresh(interaction.guild)
+        msg3 = await channel.send(embed=embed3, view=claims_lb_view)
+        await msg3.pin()
+
+        self.bot.config_manager.set_stats_channel(channel.id, msg1.id, msg2.id, msg3.id)
         await interaction.response.send_message(f"Stats set up in {channel.mention}.", ephemeral=True)
 
     @setup_group.command(name="archive", description="Set the channel for archiving ticket attachments")

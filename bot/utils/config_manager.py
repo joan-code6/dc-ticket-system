@@ -9,6 +9,7 @@ DEFAULT_CONFIG = {
     "stats_channel_id": None,
     "stats_message_id": None,
     "stats_leaderboard_message_id": None,
+    "stats_claims_leaderboard_message_id": None,
     "archive_channel_id": None
 }
 
@@ -68,11 +69,12 @@ class ConfigManager:
         self._save(cfg)
         self._config = cfg
 
-    def set_stats_channel(self, channel_id: int, message_id: int, leaderboard_message_id: int = None):
+    def set_stats_channel(self, channel_id: int, message_id: int, leaderboard_message_id: int = None, claims_leaderboard_message_id: int = None):
         cfg = self.config
         cfg["stats_channel_id"] = channel_id
         cfg["stats_message_id"] = message_id
         cfg["stats_leaderboard_message_id"] = leaderboard_message_id
+        cfg["stats_claims_leaderboard_message_id"] = claims_leaderboard_message_id
         self._save(cfg)
         self._config = cfg
 
@@ -84,6 +86,9 @@ class ConfigManager:
 
     def get_stats_leaderboard_message(self) -> Optional[int]:
         return self.config.get("stats_leaderboard_message_id")
+
+    def get_stats_claims_leaderboard_message(self) -> Optional[int]:
+        return self.config.get("stats_claims_leaderboard_message_id")
 
     def get_archive_channel(self) -> Optional[int]:
         return self.config.get("archive_channel_id")

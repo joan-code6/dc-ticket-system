@@ -81,6 +81,72 @@ class StatsLeaderboardView(discord.ui.View):
         return embed
 
 
+class ClaimsLeaderboardView(discord.ui.View):
+    def __init__(self, bot: "TicketBot"):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.current_view = 0
+
+    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, custom_id="claims_leaderboard_prev")
+    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_view > 0:
+            self.current_view -= 1
+        else:
+            self.current_view = len(VIEW_PERIODS) - 1
+        embed = await self._build_embed(interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, custom_id="claims_leaderboard_next")
+    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if self.current_view < len(VIEW_PERIODS) - 1:
+            self.current_view += 1
+        else:
+            self.current_view = 0
+        embed = await self._build_embed(interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _build_embed(self, guild: discord.Guild) -> discord.Embed:
+        period_name, period_key = VIEW_PERIODS[self.current_view]
+        now = datetime.now(timezone.utc)
+
+        if period_key == "today":
+            since = now.strftime("%Y-%m-%d")
+        elif period_key == "week":
+            since = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        elif period_key == "month":
+            since = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            since = None
+
+        data = await self.bot.db.get_claims_leaderboard(guild.id, since)
+
+        if not data:
+            lines = ["No claims yet."]
+        else:
+            lines = []
+            sorted_data = sorted(data.items(), key=lambda x: -x[1])
+            for i, (uid, count) in enumerate(sorted_data[:15]):
+                member = guild.get_member(uid)
+                name = member.display_name if member else f"Unknown ({uid})"
+                label = "ticket" if count == 1 else "tickets"
+                if i == 0:
+                    lines.append(f"🏆 **{name}** — {count} {label}")
+                else:
+                    lines.append(f"{i+1}. **{name}** — {count} {label}")
+
+        embed = discord.Embed(
+            title=f"Staff Claims Leaderboard — {period_name}",
+            description="\n".join(lines),
+            color=discord.Color.blue()
+        )
+        embed.set_footer(text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}")
+        return embed
+
+    async def refresh(self, guild: discord.Guild):
+        embed = await self._build_embed(guild)
+        return embed
+
+
 class StatsCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
@@ -88,11 +154,13 @@ class StatsCog(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(StatsLeaderboardView(self.bot))
+        self.bot.add_view(ClaimsLeaderboardView(self.bot))
 
     async def update_stats(self, guild: discord.Guild):
         channel_id = self.bot.config_manager.get_stats_channel()
         message_id = self.bot.config_manager.get_stats_message()
         lb_message_id = self.bot.config_manager.get_stats_leaderboard_message()
+        claims_lb_message_id = self.bot.config_manager.get_stats_claims_leaderboard_message()
 
         if not channel_id:
             return
@@ -131,8 +199,23 @@ class StatsCog(commands.Cog):
                 embed = await view.refresh(guild)
                 await lb_msg.edit(embed=embed, view=view)
 
+        # Update claims leaderboard message
+        if claims_lb_message_id:
+            try:
+                claims_lb_msg = await channel.fetch_message(claims_lb_message_id)
+            except discord.NotFound:
+                pass
+            else:
+                view = ClaimsLeaderboardView(self.bot)
+                embed = await view.refresh(guild)
+                await claims_lb_msg.edit(embed=embed, view=view)
+
     async def get_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
         view = StatsLeaderboardView(self.bot)
+        return await view.refresh(guild)
+
+    async def get_claims_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
+        view = ClaimsLeaderboardView(self.bot)
         return await view.refresh(guild)
 
 

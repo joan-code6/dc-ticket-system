@@ -62,6 +62,11 @@ class Database:
             );
         """)
         await self.conn.commit()
+        try:
+            await self.conn.execute("ALTER TABLE tickets ADD COLUMN last_reminder_at TEXT")
+            await self.conn.commit()
+        except Exception:
+            pass
 
     async def create_ticket(self, guild_id: int, channel_id: int, creator_id: int, category: str) -> int:
         cursor = await self.conn.execute(
@@ -235,3 +240,44 @@ class Database:
         async with self.conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()
             return {row["user_id"]: row["count"] for row in rows}
+
+    async def get_claims_leaderboard(self, guild_id: int, since: str = None) -> Dict[int, int]:
+        """Count distinct tickets each staff member claimed since a given timestamp."""
+        if since:
+            query = """
+                SELECT tl.user_id, COUNT(DISTINCT tl.ticket_id) AS count
+                FROM ticket_logs tl
+                JOIN tickets t ON tl.ticket_id = t.id
+                WHERE t.guild_id = ? AND tl.action = 'claim' AND tl.timestamp >= ?
+                GROUP BY tl.user_id
+                ORDER BY count DESC
+            """
+            params = (guild_id, since)
+        else:
+            query = """
+                SELECT tl.user_id, COUNT(DISTINCT tl.ticket_id) AS count
+                FROM ticket_logs tl
+                JOIN tickets t ON tl.ticket_id = t.id
+                WHERE t.guild_id = ? AND tl.action = 'claim'
+                GROUP BY tl.user_id
+                ORDER BY count DESC
+            """
+            params = (guild_id,)
+        async with self.conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return {row["user_id"]: row["count"] for row in rows}
+
+    async def get_assigned_open_tickets(self, guild_id: int) -> List[Dict[str, Any]]:
+        async with self.conn.execute(
+            "SELECT * FROM tickets WHERE guild_id = ? AND status = 'open' AND assigned_ids != '[]'",
+            (guild_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def update_ticket_reminder(self, ticket_id: int, timestamp: str):
+        await self.conn.execute(
+            "UPDATE tickets SET last_reminder_at = ? WHERE id = ?",
+            (timestamp, ticket_id)
+        )
+        await self.conn.commit()
