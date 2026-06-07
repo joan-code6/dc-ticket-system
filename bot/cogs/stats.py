@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
+import re
 
 if TYPE_CHECKING:
     from main import TicketBot
@@ -163,6 +164,75 @@ class ClaimsLeaderboardView(discord.ui.View):
         return embed
 
 
+class CategoryPingSelect(discord.ui.Select):
+    def __init__(self, bot: "TicketBot"):
+        self.bot = bot
+        categories = bot.config_manager.get_categories()
+        options = []
+        for name in categories.keys():
+            match = re.match(r'^<(a?:)?(\w+):(\d+)>\s*(.*)', name)
+            if match:
+                emoji_name = match.group(2)
+                emoji_id = int(match.group(3))
+                label = match.group(4)
+                emoji = discord.PartialEmoji(name=emoji_name, id=emoji_id)
+            else:
+                label = name
+                emoji = None
+            options.append(discord.SelectOption(label=label, value=name, emoji=emoji))
+        super().__init__(placeholder="Select categories to get pinged for...", min_values=0, max_values=len(options), options=options, custom_id="category_ping_select")
+
+    async def callback(self, interaction: discord.Interaction):
+        member = interaction.user
+        if not isinstance(member, discord.Member):
+            await interaction.response.send_message("This can only be used in a server.", ephemeral=True)
+            return
+
+        guild = interaction.guild
+        categories = self.bot.config_manager.get_categories()
+        selected = set(self.values)
+        to_add = []
+        to_remove = []
+
+        for name, cfg in categories.items():
+            role = discord.utils.get(guild.roles, name=cfg["role_name"])
+            if not role:
+                continue
+            has_role = role in member.roles
+            wants_role = name in selected
+            if wants_role and not has_role:
+                to_add.append(role)
+            elif not wants_role and has_role:
+                to_remove.append(role)
+
+        try:
+            if to_remove:
+                await member.remove_roles(*to_remove, reason="Updated ping preferences")
+            if to_add:
+                await member.add_roles(*to_add, reason="Updated ping preferences")
+        except discord.Forbidden:
+            await interaction.response.send_message("I don't have permission to manage these roles.", ephemeral=True)
+            return
+
+        added_str = ", ".join(r.mention for r in to_add) if to_add else ""
+        removed_str = ", ".join(r.mention for r in to_remove) if to_remove else ""
+        msg = "Ping preferences updated."
+        if added_str:
+            msg += f"\nAdded: {added_str}"
+        if removed_str:
+            msg += f"\nRemoved: {removed_str}"
+        if not to_add and not to_remove:
+            msg = "No changes made to your ping preferences."
+
+        await interaction.response.send_message(msg, ephemeral=True)
+
+
+class CategoryPingView(discord.ui.View):
+    def __init__(self, bot: "TicketBot"):
+        super().__init__(timeout=None)
+        self.add_item(CategoryPingSelect(bot))
+
+
 class StatsCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
@@ -171,6 +241,35 @@ class StatsCog(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(StatsLeaderboardView(self.bot))
         self.bot.add_view(ClaimsLeaderboardView(self.bot))
+        self.bot.add_view(CategoryPingView(self.bot))
+
+    async def _build_stats_embed(self, guild: discord.Guild) -> discord.Embed:
+        open_count = await self.bot.db.get_open_tickets_count(guild.id)
+        staff_loads = await self.bot.db.get_staff_loads(guild.id)
+        unclaimed = await self.bot.db.get_unclaimed_tickets(guild.id)
+
+        lines = [f"Open Tickets: {open_count}", "Staff Loads:"]
+        if staff_loads:
+            for uid, count in sorted(staff_loads.items(), key=lambda x: -x[1]):
+                member = guild.get_member(uid)
+                name = member.mention if member else f"<@{uid}>"
+                lines.append(f"{name} — {count}")
+        else:
+            lines.append("None")
+
+        if unclaimed:
+            lines.append("")
+            lines.append(f"**Unclaimed Tickets ({len(unclaimed)}):**")
+            for ticket in unclaimed[:10]:
+                channel = guild.get_channel(ticket["channel_id"])
+                creator = guild.get_member(ticket["creator_id"])
+                chan_str = channel.mention if channel else f"#{ticket['channel_id']}"
+                creator_str = creator.mention if creator else f"<@{ticket['creator_id']}>"
+                lines.append(f"• {chan_str} ({ticket['category']}) by {creator_str}")
+            if len(unclaimed) > 10:
+                lines.append(f"*...and {len(unclaimed) - 10} more*")
+
+        return discord.Embed(title="Ticket Stats", description="\n".join(lines), color=discord.Color.purple())
 
     async def update_stats(self, guild: discord.Guild):
         channel_id = self.bot.config_manager.get_stats_channel()
@@ -191,31 +290,7 @@ class StatsCog(commands.Cog):
             except discord.NotFound:
                 pass
             else:
-                open_count = await self.bot.db.get_open_tickets_count(guild.id)
-                staff_loads = await self.bot.db.get_staff_loads(guild.id)
-                unclaimed = await self.bot.db.get_unclaimed_tickets(guild.id)
-
-                lines = [f"Open Tickets: {open_count}", "Staff Loads:"]
-                if staff_loads:
-                    for uid, count in sorted(staff_loads.items(), key=lambda x: -x[1]):
-                        member = guild.get_member(uid)
-                        name = member.mention if member else f"<@{uid}>"
-                        lines.append(f"{name} — {count}")
-                else:
-                    lines.append("None")
-
-                if unclaimed:
-                    lines.append("")
-                    lines.append(f"**Unclaimed Tickets ({len(unclaimed)}):**")
-                    for ticket in unclaimed[:10]:
-                        channel = guild.get_channel(ticket["channel_id"])
-                        creator = guild.get_member(ticket["creator_id"])
-                        chan_str = channel.mention if channel else f"#{ticket['channel_id']}"
-                        creator_str = creator.mention if creator else f"<@{ticket['creator_id']}>"
-                        lines.append(f"• {chan_str} ({ticket['category']}) by {creator_str}")
-                    if len(unclaimed) > 10:
-                        lines.append(f"*...and {len(unclaimed) - 10} more*")
-                embed = discord.Embed(title="Ticket Stats", description="\n".join(lines), color=discord.Color.purple())
+                embed = await self._build_stats_embed(guild)
                 await msg.edit(embed=embed)
 
         # Update leaderboard message
@@ -239,6 +314,20 @@ class StatsCog(commands.Cog):
                 view = ClaimsLeaderboardView(self.bot)
                 embed = await view.refresh(guild)
                 await claims_lb_msg.edit(embed=embed, view=view)
+
+        # Update dashboard message
+        dashboard_channel_id = self.bot.config_manager.get_dashboard_channel()
+        dashboard_message_id = self.bot.config_manager.get_dashboard_message()
+        if dashboard_channel_id and dashboard_message_id:
+            dash_channel = guild.get_channel(dashboard_channel_id)
+            if dash_channel:
+                try:
+                    dash_msg = await dash_channel.fetch_message(dashboard_message_id)
+                except discord.NotFound:
+                    pass
+                else:
+                    embed = await self._build_stats_embed(guild)
+                    await dash_msg.edit(embed=embed, view=CategoryPingView(self.bot))
 
     async def get_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
         view = StatsLeaderboardView(self.bot)

@@ -13,7 +13,9 @@ DEFAULT_CONFIG = {
     "stats_leaderboard_message_id": None,
     "stats_claims_leaderboard_message_id": None,
     "archive_channel_id": None,
-    "staff_role_id": None
+    "staff_role_id": None,
+    "dashboard_channel_id": None,
+    "dashboard_message_id": None
 }
 
 
@@ -131,5 +133,18 @@ class ConfigManager:
         cfg = self.config
         cfg["panel_title"] = title
         cfg["panel_description"] = description.split("\n") if description else []
+        self._save(cfg)
+        self._config = cfg
+
+    def get_dashboard_channel(self) -> Optional[int]:
+        return self.config.get("dashboard_channel_id")
+
+    def get_dashboard_message(self) -> Optional[int]:
+        return self.config.get("dashboard_message_id")
+
+    def set_dashboard(self, channel_id: int, message_id: int):
+        cfg = self.config
+        cfg["dashboard_channel_id"] = channel_id
+        cfg["dashboard_message_id"] = message_id
         self._save(cfg)
         self._config = cfg
