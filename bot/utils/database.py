@@ -118,8 +118,12 @@ class Database:
         )
         await self.conn.commit()
 
-    async def rename_ticket_channel(self, ticket_id: int, new_name: str):
-        pass
+    async def reopen_ticket(self, ticket_id: int):
+        await self.conn.execute(
+            "UPDATE tickets SET status = 'open', closed_at = NULL, close_reason = NULL WHERE id = ?",
+            (ticket_id,)
+        )
+        await self.conn.commit()
 
     async def add_transcript_message(self, ticket_id: int, message_id: int, author_id: int,
                                      author_name: str, content: str, timestamp: datetime,

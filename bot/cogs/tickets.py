@@ -3,7 +3,6 @@ from discord import ui
 from discord.ext import commands
 from typing import TYPE_CHECKING
 import json
-import asyncio
 import re
 
 if TYPE_CHECKING:
@@ -185,21 +184,19 @@ class TicketActionView(ui.View):
         await bot.db.close_ticket(ticket["id"])
         await bot.db.add_ticket_log(ticket["id"], "close", interaction.user.id)
 
+        creator = interaction.guild.get_member(ticket["creator_id"])
+        if creator:
+            await channel.set_permissions(creator, view_channel=True, send_messages=False)
+
         stats_cog = bot.get_cog("StatsCog")
         if stats_cog:
             await stats_cog.update_stats(interaction.guild)
 
-        archive_channel_id = bot.config_manager.get_archive_channel()
-        if archive_channel_id:
-            await archive_attachments(
-                bot, channel, ticket["id"], bot.db, archive_channel_id,
-                ticket_name=f"#{ticket['id']}",
-            )
-
-        await interaction.followup.send("Ticket closed and transcript saved.", ephemeral=True)
-        await channel.send("This channel will be deleted in 5 seconds...")
-        await asyncio.sleep(5)
-        await channel.delete(reason=f"Ticket closed by {interaction.user}")
+        await interaction.followup.send("Ticket closed.", ephemeral=True)
+        await channel.send(
+            f"🔒 This ticket has been closed by {interaction.user.mention}.",
+            view=CloseActionView()
+        )
 
     @ui.button(label="Assign to Me", style=discord.ButtonStyle.green, custom_id="ticket_assign_button")
     async def assign_to_me(self, interaction: discord.Interaction, button: ui.Button):
@@ -250,6 +247,67 @@ class TicketActionView(ui.View):
         await interaction.followup.send(f"{interaction.user.mention} has been assigned to this ticket.")
 
 
+class CloseActionView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Delete", style=discord.ButtonStyle.danger, custom_id="ticket_delete_button")
+    async def delete_ticket(self, interaction: discord.Interaction, button: ui.Button):
+        bot: TicketBot = interaction.client
+        if not await check_staff_role(interaction):
+            return
+        ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            return
+        if ticket["status"] != "closed":
+            await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        channel = interaction.channel
+        archive_channel_id = bot.config_manager.get_archive_channel()
+        if archive_channel_id:
+            await archive_attachments(
+                bot, channel, ticket["id"], bot.db, archive_channel_id,
+                ticket_name=f"#{ticket['id']}",
+            )
+
+        await channel.delete(reason=f"Ticket deleted by {interaction.user}")
+
+    @ui.button(label="Reopen", style=discord.ButtonStyle.green, custom_id="ticket_reopen_button")
+    async def reopen_ticket(self, interaction: discord.Interaction, button: ui.Button):
+        bot: TicketBot = interaction.client
+        if not await check_staff_role(interaction):
+            return
+        ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            return
+        if ticket["status"] != "closed":
+            await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        await bot.db.reopen_ticket(ticket["id"])
+        await bot.db.add_ticket_log(ticket["id"], "reopen", interaction.user.id)
+
+        channel = interaction.channel
+        creator = interaction.guild.get_member(ticket["creator_id"])
+        if creator:
+            await channel.set_permissions(creator, view_channel=True, send_messages=True)
+
+        stats_cog = bot.get_cog("StatsCog")
+        if stats_cog:
+            await stats_cog.update_stats(interaction.guild)
+
+        await interaction.message.edit(view=None, content=interaction.message.content + "\n\n✅ Reopened")
+        await channel.send(f"🔓 Ticket reopened by {interaction.user.mention}.")
+        await interaction.followup.send("Ticket reopened.", ephemeral=True)
+
+
 class CreateTicketButton(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -273,6 +331,7 @@ class TicketsCog(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(CreateTicketButton())
         self.bot.add_view(TicketActionView())
+        self.bot.add_view(CloseActionView())
         categories = self.bot.config_manager.get_categories()
         if categories:
             self.bot.add_view(TicketCategoryView(categories))

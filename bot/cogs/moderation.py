@@ -3,12 +3,10 @@ from discord import app_commands
 from discord.ext import commands
 from typing import TYPE_CHECKING
 import json
-import asyncio
 
 if TYPE_CHECKING:
     from main import TicketBot
 
-from utils.archive import archive_attachments
 from utils.checks import has_staff_role
 
 
@@ -99,6 +97,33 @@ class ModerationCog(commands.Cog):
         await interaction.response.send_message(f"{user.mention} has been assigned to this ticket.")
         await self._refresh_stats(interaction.guild)
 
+    @app_commands.command(name="unassign", description="Unassign a staff member from this ticket")
+    @app_commands.describe(user="User to unassign")
+    @app_commands.check(has_staff_role)
+    async def unassign(self, interaction: discord.Interaction, user: discord.Member):
+        ticket = await self._get_ticket(interaction)
+        if not ticket:
+            return
+        if ticket["status"] == "closed":
+            await interaction.response.send_message("This ticket is closed.", ephemeral=True)
+            return
+
+        assigned = json.loads(ticket["assigned_ids"])
+        if user.id not in assigned:
+            await interaction.response.send_message(f"{user.mention} is not assigned to this ticket.", ephemeral=True)
+            return
+
+        assigned.remove(user.id)
+        await self.bot.db.update_ticket_assigned(ticket["id"], assigned)
+        ticket["assigned_ids"] = json.dumps(assigned)
+        await self.bot.db.add_ticket_log(ticket["id"], "unassign", interaction.user.id, {"unassigned_user": user.id})
+
+        channel = interaction.channel
+        await channel.set_permissions(user, overwrite=None)
+        await self._update_embed(channel, ticket)
+        await interaction.response.send_message(f"{user.mention} has been unassigned from this ticket.")
+        await self._refresh_stats(interaction.guild)
+
     @app_commands.command(name="unclaim", description="Unclaim this ticket")
     @app_commands.check(has_staff_role)
     async def unclaim(self, interaction: discord.Interaction):
@@ -168,10 +193,9 @@ class ModerationCog(commands.Cog):
             await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
             return
 
-        await interaction.response.send_message("Closing ticket and saving transcript...", ephemeral=True)
+        await interaction.response.defer(ephemeral=True)
 
         channel = interaction.channel
-        # Save transcript
         async for msg in channel.history(limit=None, oldest_first=True):
             attachments = [a.url for a in msg.attachments]
             await self.bot.db.add_transcript_message(
@@ -182,19 +206,20 @@ class ModerationCog(commands.Cog):
         await self.bot.db.close_ticket(ticket["id"], reason)
         await self.bot.db.add_ticket_log(ticket["id"], "close", interaction.user.id, {"reason": reason})
 
-        await interaction.followup.send(f"Ticket closed. Reason: {reason or 'No reason provided.'}")
+        creator = interaction.guild.get_member(ticket["creator_id"])
+        if creator:
+            await channel.set_permissions(creator, view_channel=True, send_messages=False)
+
         await self._refresh_stats(interaction.guild)
 
-        archive_channel_id = self.bot.config_manager.get_archive_channel()
-        if archive_channel_id:
-            await archive_attachments(
-                self.bot, channel, ticket["id"], self.bot.db, archive_channel_id,
-                ticket_name=f"#{ticket['id']}",
-            )
+        reason_text = f"\nReason: {reason}" if reason else ""
+        await interaction.followup.send("Ticket closed.", ephemeral=True)
 
-        await interaction.followup.send("This channel will be deleted in 5 seconds...")
-        await asyncio.sleep(5)
-        await channel.delete(reason=f"Ticket closed by {interaction.user}")
+        from cogs.tickets import CloseActionView
+        await channel.send(
+            f"🔒 This ticket has been closed by {interaction.user.mention}.{reason_text}",
+            view=CloseActionView()
+        )
 
     @app_commands.command(name="rename", description="Rename this ticket channel")
     @app_commands.describe(name="New channel name")
