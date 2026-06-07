@@ -27,9 +27,8 @@ class TicketCategorySelect(ui.Select):
             else:
                 label = name
                 emoji = None
-            description = cfg.get("description", f"Create a {label} ticket")
             options.append(
-                discord.SelectOption(label=label, value=name, emoji=emoji, description=description)
+                discord.SelectOption(label=label, value=name, emoji=emoji)
             )
         super().__init__(placeholder="Choose a ticket category...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
         self.categories = categories
