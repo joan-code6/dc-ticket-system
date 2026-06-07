@@ -12,6 +12,7 @@ A full-featured ticket system built with `discord.py`. Create tickets via a butt
   - [2. Add questions (optional)](#2-add-questions-optional)
   - [3. Send the ticket panel](#3-send-the-ticket-panel)
   - [4. Set up the stats channel](#4-set-up-the-stats-channel)
+  - [5. Set the staff role (optional)](#5-set-the-staff-role-optional)
   - [Managing categories](#managing-categories)
 - [Moderator Usage](#moderator-usage)
   - [Claiming a ticket](#claiming-a-ticket)
@@ -101,6 +102,14 @@ Creates two pinned messages in a dedicated stats channel:
 ```
 
 > Pro tip: Create a dedicated `#ticket-stats` channel that only staff can see. Run this command once per server.
+
+### 5. Set the staff role (optional)
+
+Assign an existing Discord role to be tracked on the leaderboards. Members with this role always appear on the interaction and claims leaderboards, even if they have 0 tickets for the selected period.
+
+```
+/setup staffrole role:<@role>
+```
 
 ### Managing categories
 
@@ -221,7 +230,10 @@ Open Tickets: 7
 Staff Loads:
 @admin1 — 3
 @admin2 — 1
-@admin3 — 0
+
+Unclaimed Tickets (2):
+• #user3 (Support) by @user3
+• #user4 (Bug Report) by @user4
 ```
 
 ### Leaderboard
@@ -235,4 +247,27 @@ The second pinned message shows a leaderboard of staff interactions. Use the **�
 | This Month | Last 30 days |
 | All Time | Since the bot was set up |
 
+If a **staff role** is configured via `/setup staffrole`, all members with that role appear on the leaderboard — even those with 0 interactions.
+
 Each staff member's count is the **number of distinct tickets** they've interacted with (claimed, assigned, closed, etc.), including closed tickets.
+
+---
+
+## Running the Bot
+
+### Linux/macOS
+
+```bash
+./run.sh          # Foreground session with auto-reload (Ctrl+C to stop)
+./run.sh daemon   # Start as background daemon, tail live logs
+./run.sh status   # Check daemon status and view latest logs
+./run.sh stop     # Stop the daemon
+```
+
+The script auto-creates a `venv/` and installs dependencies on first run.
+
+### Windows
+
+```powershell
+.\run.ps1         # Foreground session with auto-reload (Ctrl+C to stop)
+```
