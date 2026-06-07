@@ -12,6 +12,44 @@ from utils.archive import archive_attachments
 from utils.checks import check_staff_role
 
 
+async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Guild) -> discord.Embed:
+    embed = discord.Embed(
+        title=f"Ticket #{ticket['id']} — Deleted",
+        color=discord.Color.dark_red()
+    )
+    embed.add_field(name="Category", value=ticket["category"], inline=True)
+
+    creator = guild.get_member(ticket["creator_id"])
+    embed.add_field(name="Creator", value=creator.mention if creator else f"<@{ticket['creator_id']}>", inline=True)
+
+    assigned_ids = json.loads(ticket["assigned_ids"])
+    assigned_text = "None"
+    if assigned_ids:
+        mentions = []
+        for uid in assigned_ids:
+            member = guild.get_member(uid)
+            mentions.append(member.mention if member else f"<@{uid}>")
+        assigned_text = ", ".join(mentions)
+    embed.add_field(name="Assigned Staff", value=assigned_text, inline=False)
+
+    created = ticket["created_at"]
+    closed = ticket["closed_at"]
+    embed.add_field(name="Created", value=created or "Unknown", inline=True)
+    embed.add_field(name="Closed", value=closed or "Unknown", inline=True)
+
+    close_reason = ticket.get("close_reason")
+    if close_reason:
+        embed.add_field(name="Close Reason", value=close_reason, inline=False)
+
+    embed.add_field(
+        name="Full Transcript",
+        value=f"Use `/transcript view {ticket['id']}` to see all messages.",
+        inline=False
+    )
+
+    return embed
+
+
 class TicketCategorySelect(ui.Select):
     def __init__(self, categories: dict):
         options = []
@@ -267,6 +305,14 @@ class CloseActionView(ui.View):
         await interaction.response.defer(ephemeral=True)
 
         channel = interaction.channel
+
+        transcript_channel_id = bot.config_manager.get_transcript_channel()
+        if transcript_channel_id:
+            transcript_channel = interaction.guild.get_channel(transcript_channel_id)
+            if transcript_channel:
+                embed = await build_ticket_summary(bot, ticket, interaction.guild)
+                await transcript_channel.send(embed=embed)
+
         archive_channel_id = bot.config_manager.get_archive_channel()
         if archive_channel_id:
             await archive_attachments(

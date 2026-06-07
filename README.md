@@ -13,8 +13,9 @@ A full-featured ticket system built with `discord.py`. Create tickets via a butt
   - [3. Send the ticket panel](#3-send-the-ticket-panel)
   - [4. Set up the stats channel](#4-set-up-the-stats-channel)
   - [5. Set the archive channel](#5-set-the-archive-channel)
-  - [6. Set up the dashboard](#6-set-up-the-dashboard)
-  - [7. Set the staff role (optional)](#7-set-the-staff-role-optional)
+  - [6. Set the transcript log channel](#6-set-the-transcript-log-channel)
+  - [7. Set up the dashboard](#7-set-up-the-dashboard)
+  - [8. Set the staff role (optional)](#8-set-the-staff-role-optional)
   - [Managing categories](#managing-categories)
 - [Moderator Usage](#moderator-usage)
   - [Quick actions (buttons)](#quick-actions-buttons)
@@ -124,7 +125,17 @@ When a ticket is closed, all attachments (images, files, etc.) are downloaded an
 
 > The archive channel should be a staff-only channel. Transcript links are automatically updated to point to the archived copies.
 
-### 6. Set up the dashboard
+### 6. Set the transcript log channel
+
+When a ticket is deleted (via the **Delete** button), a summary embed is posted here. The summary includes the ticket ID, category, creator, assigned staff, timestamps, and close reason — plus a note to use `/transcript view <id>` for the full transcript.
+
+```
+/setup transcript channel:<#channel>
+```
+
+> Unlike the archive channel (which stores raw attachment files), this channel is a readable log of closed tickets for staff reference.
+
+### 7. Set up the dashboard
 
 Creates a public dashboard with live ticket stats and a **category ping role selector**. Users can self-assign ping roles for specific ticket categories so they get notified when tickets are opened in categories they care about.
 
@@ -139,7 +150,7 @@ The dashboard embed shows:
 
 > Run this in a public channel where users can see it.
 
-### 7. Set the staff role (optional)
+### 8. Set the staff role (optional)
 
 Assign an existing Discord role to be tracked on the leaderboards. Members with this role always appear on the interaction and claims leaderboards, even if they have 0 tickets for the selected period.
 
@@ -242,10 +253,10 @@ Or click the **Close Ticket** button in the ticket channel.
 
 | Button | Effect |
 |--------|--------|
-| **Delete** | Archives all attachments to the archive channel, then permanently deletes the channel. |
+| **Delete** | Posts a ticket summary to the transcript log channel, archives all attachments, then permanently deletes the channel. |
 | **Reopen** | Reopens the ticket, restoring the creator's ability to send messages. |
 
-> The transcript is searchable and viewable later via `/transcript`. Attachments are only archived to permanent storage when **Delete** is clicked.
+> The transcript is searchable and viewable later via `/transcript`. Attachments are only archived to permanent storage when **Delete** is clicked. The transcript log channel (if configured) receives a summary embed so staff can review closed tickets at a glance.
 
 ---
 

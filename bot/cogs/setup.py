@@ -124,6 +124,15 @@ class SetupCog(commands.Cog):
         self.bot.config_manager.set_dashboard(channel.id, msg.id)
         await interaction.response.send_message(f"Dashboard set up in {channel.mention}.", ephemeral=True)
 
+    @setup_group.command(name="transcript", description="Set the channel where ticket summaries are posted after deletion")
+    @_has_setup_access()
+    async def setup_transcript(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        self.bot.config_manager.set_transcript_channel(channel.id)
+        await interaction.response.send_message(
+            f"Transcript log channel set to {channel.mention}. Ticket summaries will be posted here after deletion.",
+            ephemeral=True,
+        )
+
     @commands.command(name="ping")
     async def ping(self, ctx: commands.Context):
         await ctx.send("Pong!")

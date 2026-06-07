@@ -15,7 +15,8 @@ DEFAULT_CONFIG = {
     "archive_channel_id": None,
     "staff_role_id": None,
     "dashboard_channel_id": None,
-    "dashboard_message_id": None
+    "dashboard_message_id": None,
+    "transcript_channel_id": None
 }
 
 
@@ -146,5 +147,14 @@ class ConfigManager:
         cfg = self.config
         cfg["dashboard_channel_id"] = channel_id
         cfg["dashboard_message_id"] = message_id
+        self._save(cfg)
+        self._config = cfg
+
+    def get_transcript_channel(self) -> Optional[int]:
+        return self.config.get("transcript_channel_id")
+
+    def set_transcript_channel(self, channel_id: int):
+        cfg = self.config
+        cfg["transcript_channel_id"] = channel_id
         self._save(cfg)
         self._config = cfg
