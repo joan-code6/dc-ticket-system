@@ -1,30 +1,27 @@
 #!/bin/bash
-# Discord Ticket Bot - Runner (Linux/macOS)
-#   ./run.sh          Foreground session with auto-reload
-#   ./run.sh daemon   Start as background daemon (nohup)
-#   ./run.sh status   Show daemon status and latest logs
-#   ./run.sh stop     Stop the daemon
+# DC Ticket Bot — systemd user service manager
+#   ./run.sh            Install, enable & start the service
+#   ./run.sh start      Start the service
+#   ./run.sh stop       Stop the service
+#   ./run.sh restart    Restart the service
+#   ./run.sh status     Show service status + recent logs
+#   ./run.sh logs       Tail live logs
+#   ./run.sh install    Create service + enable (don't start)
+#   ./run.sh uninstall  Stop, disable & remove service
 
 set -euo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-PIDFILE="bot.pid"
-LOGFILE="bot.log"
+ROOT="$(pwd)"
+SERVICE_NAME="dc-ticket-bot"
+SERVICE_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+SERVICE_FILE="$SERVICE_DIR/$SERVICE_NAME.service"
+LOGFILE="$ROOT/bot.log"
 
 # ── helpers ──────────────────────────────────────────────
 
-_load_env() {
-    if [ -f ".env" ]; then
-        export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs) || true
-    fi
-    if [ -n "${DC_TOKEN:-}" ]; then
-        export DISCORD_BOT_TOKEN="$DC_TOKEN"
-    fi
-}
-
 _setup_venv() {
     if [ ! -f "venv/bin/python3" ]; then
-        echo "Creating virtual environment..."
+        echo "Creating venv..."
         python3 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip -q
@@ -34,169 +31,116 @@ _setup_venv() {
     fi
 }
 
-_get_python() {
-    if [ -f "venv/bin/python3" ]; then
-        echo "venv/bin/python3"
-    elif command -v python3 &>/dev/null; then
-        command -v python3
-    elif command -v python &>/dev/null; then
-        command -v python
+_write_service() {
+    mkdir -p "$SERVICE_DIR"
+    cat > "$SERVICE_FILE" << SERVICEOF
+[Unit]
+Description=DC Ticket Bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=$ROOT
+ExecStart=$ROOT/venv/bin/python3 -u bot/main.py
+Restart=on-failure
+RestartSec=10
+StandardOutput=append:$LOGFILE
+StandardError=append:$LOGFILE
+
+[Install]
+WantedBy=default.target
+SERVICEOF
+    echo "Service file written: $SERVICE_FILE"
+}
+
+_get_status() {
+    if systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "active"
+    elif systemctl --user is-failed --quiet "$SERVICE_NAME" 2>/dev/null; then
+        echo "failed"
     else
-        echo "Error: Python not found." >&2
-        exit 1
+        echo "inactive"
     fi
 }
 
-_daemon_running() {
-    if [ -f "$PIDFILE" ]; then
-        local pid
-        pid=$(cat "$PIDFILE")
-        if kill -0 "$pid" 2>/dev/null; then
-            return 0
-        fi
-    fi
-    return 1
+_systemctl() {
+    systemctl --user "$@"
 }
 
-# ── status ───────────────────────────────────────────────
+# ── commands ─────────────────────────────────────────────
 
-cmd_status() {
-    if _daemon_running; then
-        local pid
-        pid=$(cat "$PIDFILE")
-        echo "Bot daemon is RUNNING (PID: $pid)"
-        echo "──────────────────────────────────────"
-        if [ -f "$LOGFILE" ]; then
-            tail -20 "$LOGFILE"
-        fi
-    else
-        echo "Bot daemon is NOT running."
-        if [ -f "$LOGFILE" ]; then
-            echo ""
-            echo "Last logs:"
-            echo "──────────────────────────────────────"
-            tail -10 "$LOGFILE"
-        fi
+cmd_install() {
+    _setup_venv
+    if [ ! -f "$SERVICE_FILE" ]; then
+        _write_service
     fi
+    _systemctl daemon-reload
+    _systemctl enable "$SERVICE_NAME"
+    loginctl enable-linger "$USER" 2>/dev/null || true
+    echo "Service installed and enabled."
+    echo "Use './run.sh start' to start, './run.sh status' to check."
 }
 
-# ── stop ─────────────────────────────────────────────────
+cmd_start() {
+    if [ ! -f "$SERVICE_FILE" ]; then
+        cmd_install
+    fi
+    _systemctl start "$SERVICE_NAME"
+    echo "Started. Use './run.sh status' or './run.sh logs' to check."
+}
 
 cmd_stop() {
-    if _daemon_running; then
-        local pid
-        pid=$(cat "$PIDFILE")
-        echo "Stopping bot daemon (PID: $pid)..."
-        kill "$pid" 2>/dev/null || true
-        sleep 2
-        if kill -0 "$pid" 2>/dev/null; then
-            echo "Force killing..."
-            kill -9 "$pid" 2>/dev/null || true
-        fi
-        rm -f "$PIDFILE"
-        echo "Stopped."
-    else
-        echo "No daemon running."
-    fi
+    _systemctl stop "$SERVICE_NAME"
+    echo "Stopped."
 }
 
-# ── daemon ───────────────────────────────────────────────
+cmd_restart() {
+    _systemctl restart "$SERVICE_NAME"
+    echo "Restarted."
+}
 
-cmd_daemon() {
-    if _daemon_running; then
-        echo "Bot daemon is already running (PID: $(cat "$PIDFILE"))."
-        echo "Use './run.sh status' to view logs or './run.sh stop' to stop."
-        exit 0
-    fi
-
-    _load_env
-    if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
-        echo "Error: DISCORD_BOT_TOKEN is not set. Add DC_TOKEN to .env."
-        exit 1
-    fi
-
-    _setup_venv
-    PYTHON=$(_get_python)
-
-    echo "Starting bot daemon..."
-    nohup "$PYTHON" -u bot/main.py >> "$LOGFILE" 2>&1 &
-    echo $! > "$PIDFILE"
-    echo "Bot daemon started (PID: $(cat "$PIDFILE"))."
-    echo ""
-
-    # Show logs as they come in for a few seconds
+cmd_status() {
+    local state
+    state=$(_get_status)
+    echo "Service: $SERVICE_NAME"
+    echo "Status:  $state"
+    echo "Log:     $LOGFILE"
     echo "──────────────────────────────────────"
-    echo "Latest logs (Ctrl+C to stop watching, bot keeps running):"
+    _systemctl status "$SERVICE_NAME" --no-pager -l 2>/dev/null || true
     echo ""
-    tail -f "$LOGFILE" 2>/dev/null || true
+    if [ -f "$LOGFILE" ]; then
+        echo "── recent logs ────────────────────────"
+        tail -20 "$LOGFILE"
+    fi
 }
 
-# ── foreground (default) ─────────────────────────────────
-
-cmd_run() {
-    _load_env
-    if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
-        echo "Error: DISCORD_BOT_TOKEN is not set. Add DC_TOKEN to .env."
-        exit 1
+cmd_logs() {
+    if [ -f "$LOGFILE" ]; then
+        echo "Tailing $LOGFILE (Ctrl+C to stop)..."
+        tail -f "$LOGFILE"
+    else
+        echo "No log file yet. Start the bot first."
     fi
+}
 
-    _setup_venv
-    PYTHON=$(_get_python)
-
-    echo "Starting bot with auto-reload on file changes..."
-    echo "Watching: bot/**/*.py"
-    echo ""
-
-    MARKER=$(mktemp /tmp/ticket-bot-marker.XXXXXX)
-    trap 'rm -f "$MARKER"' EXIT SIGINT SIGTERM
-
-    while true; do
-        _load_env
-        if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
-            echo "Error: DISCORD_BOT_TOKEN missing. Exiting."
-            exit 1
-        fi
-
-        echo "[run] Starting bot..."
-        touch "$MARKER"
-        "$PYTHON" -u bot/main.py &
-        BOT_PID=$!
-        echo "[run] Bot started (PID: $BOT_PID)"
-
-        while true; do
-            sleep 2
-
-            if ! kill -0 $BOT_PID 2>/dev/null; then
-                wait $BOT_PID 2>/dev/null
-                echo "[run] Bot exited with code $?."
-                break
-            fi
-
-            CHANGED=$(find bot/ \
-                -name '*.py' \
-                -newer "$MARKER" \
-                -not -path '*/__pycache__/*' \
-                -print -quit 2>/dev/null)
-
-            if [ -n "$CHANGED" ]; then
-                echo "[run] Change detected: $CHANGED"
-                kill $BOT_PID 2>/dev/null || true
-                wait $BOT_PID 2>/dev/null || true
-                break
-            fi
-
-            touch "$MARKER"
-        done
-
-        sleep 1
-    done
+cmd_uninstall() {
+    _systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+    _systemctl disable "$SERVICE_NAME" 2>/dev/null || true
+    rm -f "$SERVICE_FILE"
+    _systemctl daemon-reload
+    echo "Service removed."
 }
 
 # ── entrypoint ───────────────────────────────────────────
 
 case "${1:-}" in
-    daemon)  cmd_daemon ;;
-    status)  cmd_status ;;
-    stop)    cmd_stop ;;
-    *)       cmd_run ;;
+    install)   cmd_install ;;
+    start)     cmd_start ;;
+    stop)      cmd_stop ;;
+    restart)   cmd_restart ;;
+    status)    cmd_status ;;
+    logs)      cmd_logs ;;
+    uninstall) cmd_uninstall ;;
+    *)         cmd_install && cmd_start ;;
 esac

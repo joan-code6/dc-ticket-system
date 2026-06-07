@@ -257,17 +257,23 @@ Each staff member's count is the **number of distinct tickets** they've interact
 
 ### Linux/macOS
 
+Uses a **user systemd service** (no root needed, runs under your user):
+
 ```bash
-./run.sh          # Foreground session with auto-reload (Ctrl+C to stop)
-./run.sh daemon   # Start as background daemon, tail live logs
-./run.sh status   # Check daemon status and view latest logs
-./run.sh stop     # Stop the daemon
+./run.sh            # Install, enable & start the service
+./run.sh start      # Start
+./run.sh stop       # Stop
+./run.sh restart    # Restart
+./run.sh status     # Service status + recent logs
+./run.sh logs       # Tail live logs (Ctrl+C to stop)
+./run.sh uninstall  # Stop, disable & remove service
 ```
 
 The script auto-creates a `venv/` and installs dependencies on first run.
+Logs are written to `bot.log` in the project directory.
 
 ### Windows
 
 ```powershell
-.\run.ps1         # Foreground session with auto-reload (Ctrl+C to stop)
+.\run.ps1           # Foreground session with auto-reload (Ctrl+C to stop)
 ```
