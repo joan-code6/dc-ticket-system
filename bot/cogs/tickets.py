@@ -42,7 +42,7 @@ class TicketCategorySelect(ui.Select):
         bot: TicketBot = interaction.client
         existing = await bot.db.get_open_ticket_by_user(interaction.user.id, interaction.guild_id)
         if existing:
-            await interaction.response.send_message("You already have an open ticket!", ephemeral=True)
+            await interaction.response.send_message("You already have an open ticket! Please close it before opening a new one.", ephemeral=True)
             return
 
         if not questions:
