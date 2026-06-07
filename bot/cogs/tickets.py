@@ -116,17 +116,17 @@ class TicketQuestionsModal(ui.Modal):
         super().__init__(title=f"{category.title()} Ticket")
         self.category = category
         self.on_submit_callback = on_submit_callback
-        self.answers = {}
+        self.question_map = {}
         for i, question in enumerate(questions[:5]):
-            text_input = ui.TextInput(label=question[:45], style=discord.TextStyle.short, required=False)
-            setattr(self, f"q{i}", text_input)
+            text_input = ui.TextInput(label=question[:45], style=discord.TextStyle.short, required=False, custom_id=f"q{i}")
+            self.question_map[f"q{i}"] = question[:45]
             self.add_item(text_input)
 
     async def on_submit(self, interaction: discord.Interaction):
         answers = {}
         for child in self.children:
             if isinstance(child, ui.TextInput):
-                answers[str(child.label)] = child.value
+                answers[self.question_map[child.custom_id]] = child.value
         await interaction.response.defer(ephemeral=True)
         await self.on_submit_callback(interaction, self.category, answers)
 

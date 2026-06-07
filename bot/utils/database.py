@@ -1,6 +1,6 @@
 import aiosqlite
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
 DATABASE_PATH = "bot/bot.db"
@@ -114,7 +114,7 @@ class Database:
     async def close_ticket(self, ticket_id: int, reason: Optional[str] = None):
         await self.conn.execute(
             "UPDATE tickets SET status = 'closed', closed_at = ?, close_reason = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), reason, ticket_id)
+            (datetime.now(timezone.utc).isoformat(), reason, ticket_id)
         )
         await self.conn.commit()
 
