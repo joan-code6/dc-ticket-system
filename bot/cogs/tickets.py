@@ -4,6 +4,7 @@ from discord.ext import commands
 from typing import TYPE_CHECKING
 import json
 import asyncio
+import re
 
 if TYPE_CHECKING:
     from main import TicketBot
@@ -14,10 +15,20 @@ from utils.checks import check_staff_role
 
 class TicketCategorySelect(ui.Select):
     def __init__(self, categories: dict):
-        options = [
-            discord.SelectOption(label=name, value=name, description=f"Create a {name} ticket")
-            for name in categories.keys()
-        ]
+        options = []
+        for name in categories.keys():
+            match = re.match(r'^<(a?:)?(\w+):(\d+)>\s*(.*)', name)
+            if match:
+                emoji_name = match.group(2)
+                emoji_id = int(match.group(3))
+                label = match.group(4)
+                emoji = discord.PartialEmoji(name=emoji_name, id=emoji_id)
+            else:
+                label = name
+                emoji = None
+            options.append(
+                discord.SelectOption(label=label, value=name, emoji=emoji, description=f"Create a {label} ticket")
+            )
         super().__init__(placeholder="Choose a ticket category...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
         self.categories = categories
 
@@ -114,7 +125,9 @@ class TicketCategoryView(ui.View):
 
 class TicketQuestionsModal(ui.Modal):
     def __init__(self, category: str, questions: list, on_submit_callback):
-        super().__init__(title=f"{category.title()} Ticket")
+        label_match = re.match(r'^<(a?:)?\w+:\d+>\s*(.*)', category)
+        name = label_match.group(2) if label_match else category
+        super().__init__(title=f"{name} Ticket")
         self.category = category
         self.on_submit_callback = on_submit_callback
         self.question_map = {}

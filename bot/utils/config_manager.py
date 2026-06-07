@@ -6,6 +6,8 @@ CONFIG_PATH = "bot/config.json"
 
 DEFAULT_CONFIG = {
     "categories": {},
+    "panel_title": "Support Tickets",
+    "panel_description": "Click the button below to create a ticket.",
     "stats_channel_id": None,
     "stats_message_id": None,
     "stats_leaderboard_message_id": None,
