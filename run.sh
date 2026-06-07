@@ -36,10 +36,18 @@ trap 'rm -f "$MARKER"' EXIT SIGINT SIGTERM
 while true; do
     # Reload .env on each restart in case token changed
     if [ -f ".env" ]; then
-        export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs)
+        export $(grep -v '^\s*#' .env | grep -v '^\s*$' | xargs) || true
     fi
     if [ -n "${DC_TOKEN:-}" ]; then
         export DISCORD_BOT_TOKEN="$DC_TOKEN"
+    fi
+
+    if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
+        echo "Error: DISCORD_BOT_TOKEN is not set. Add DC_TOKEN to .env or set DISCORD_BOT_TOKEN."
+        exit 1
+    fi
+
+    echo "[run] Starting bot..."
     touch "$MARKER"
     $PYTHON -u bot/main.py &
     BOT_PID=$!
@@ -49,7 +57,8 @@ while true; do
         sleep 2
 
         if ! kill -0 $BOT_PID 2>/dev/null; then
-            echo "[run] Bot process exited."
+            wait $BOT_PID 2>/dev/null
+            echo "[run] Bot process exited with code $?."
             break
         fi
 
