@@ -136,11 +136,13 @@ class TicketQuestionsModal(ui.Modal):
             if isinstance(q, dict):
                 text = q.get("text", "")
                 required = q.get("required", False)
+                style = discord.TextStyle.long if q.get("style") == "long" else discord.TextStyle.short
             else:
                 text = q
                 required = False
+                style = discord.TextStyle.short
             label = text[:45]
-            text_input = ui.TextInput(label=label, style=discord.TextStyle.short, required=required, custom_id=f"q{i}")
+            text_input = ui.TextInput(label=label, style=style, required=required, custom_id=f"q{i}")
             self.question_map[f"q{i}"] = label
             self.add_item(text_input)
 
