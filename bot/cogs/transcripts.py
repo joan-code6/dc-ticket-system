@@ -8,6 +8,8 @@ import json
 if TYPE_CHECKING:
     from main import TicketBot
 
+from utils.checks import has_staff_role
+
 
 class TranscriptView(discord.ui.View):
     def __init__(self, pages: list):
@@ -45,6 +47,7 @@ class TranscriptsCog(commands.Cog):
         after="ISO date after",
         before="ISO date before"
     )
+    @app_commands.check(has_staff_role)
     async def transcript_search(
         self,
         interaction: discord.Interaction,
@@ -81,6 +84,7 @@ class TranscriptsCog(commands.Cog):
 
     @transcript_group.command(name="view", description="View a transcript by ticket ID")
     @app_commands.describe(ticket_id="Ticket ID")
+    @app_commands.check(has_staff_role)
     async def transcript_view(self, interaction: discord.Interaction, ticket_id: int):
         ticket = await self.bot.db.get_ticket_by_id(ticket_id)
         if not ticket or ticket["guild_id"] != interaction.guild_id:

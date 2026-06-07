@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from main import TicketBot
 
 from utils.archive import archive_attachments
+from utils.checks import has_staff_role
 
 
 class ModerationCog(commands.Cog):
@@ -46,6 +47,7 @@ class ModerationCog(commands.Cog):
             await stats_cog.update_stats(guild)
 
     @app_commands.command(name="claim", description="Claim this ticket")
+    @app_commands.check(has_staff_role)
     async def claim(self, interaction: discord.Interaction):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -72,6 +74,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="assign", description="Assign a staff member to this ticket")
     @app_commands.describe(user="User to assign")
+    @app_commands.check(has_staff_role)
     async def assign(self, interaction: discord.Interaction, user: discord.Member):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -97,6 +100,7 @@ class ModerationCog(commands.Cog):
         await self._refresh_stats(interaction.guild)
 
     @app_commands.command(name="unclaim", description="Unclaim this ticket")
+    @app_commands.check(has_staff_role)
     async def unclaim(self, interaction: discord.Interaction):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -123,6 +127,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="add", description="Add a user to this ticket")
     @app_commands.describe(user="User to add")
+    @app_commands.check(has_staff_role)
     async def add_user(self, interaction: discord.Interaction, user: discord.Member):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -138,6 +143,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="remove", description="Remove a user from this ticket")
     @app_commands.describe(user="User to remove")
+    @app_commands.check(has_staff_role)
     async def remove_user(self, interaction: discord.Interaction, user: discord.Member):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -153,6 +159,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="close", description="Close this ticket")
     @app_commands.describe(reason="Reason for closing")
+    @app_commands.check(has_staff_role)
     async def close(self, interaction: discord.Interaction, reason: str = None):
         ticket = await self._get_ticket(interaction)
         if not ticket:
@@ -191,6 +198,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="rename", description="Rename this ticket channel")
     @app_commands.describe(name="New channel name")
+    @app_commands.check(has_staff_role)
     async def rename(self, interaction: discord.Interaction, name: str):
         ticket = await self._get_ticket(interaction)
         if not ticket:

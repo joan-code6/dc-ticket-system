@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from main import TicketBot
 
 from utils.archive import archive_attachments
+from utils.checks import check_staff_role
 
 
 class TicketCategorySelect(ui.Select):
@@ -138,6 +139,8 @@ class TicketActionView(ui.View):
     @ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="ticket_close_button")
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
+        if not await check_staff_role(interaction):
+            return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
             await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
@@ -178,6 +181,8 @@ class TicketActionView(ui.View):
     @ui.button(label="Assign to Me", style=discord.ButtonStyle.green, custom_id="ticket_assign_button")
     async def assign_to_me(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
+        if not await check_staff_role(interaction):
+            return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
             await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
