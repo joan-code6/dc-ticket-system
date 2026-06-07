@@ -30,5 +30,8 @@ build/
 .venv/
 venv/
 
+# Config (local)
+bot/config.json
+
 # Logs
 *.log

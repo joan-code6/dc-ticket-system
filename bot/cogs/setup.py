@@ -6,6 +6,18 @@ from typing import TYPE_CHECKING, Optional
 if TYPE_CHECKING:
     from main import TicketBot
 
+SETUP_BYPASS_ROLE = 1314666319035240579
+
+
+def _has_setup_access():
+    async def predicate(interaction: discord.Interaction) -> bool:
+        if interaction.user.guild_permissions.administrator:
+            return True
+        if interaction.user.get_role(SETUP_BYPASS_ROLE):
+            return True
+        raise app_commands.MissingPermissions(["Administrator"])
+    return app_commands.check(predicate)
+
 
 class SetupCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
@@ -19,7 +31,7 @@ class SetupCog(commands.Cog):
         discord_category="Discord category channel",
         role_name="Role name to create/use"
     )
-    @app_commands.checks.has_permissions(administrator=True)
+    @_has_setup_access()
     async def setup_category(self, interaction: discord.Interaction, name: str, discord_category: discord.CategoryChannel, role_name: Optional[str] = None):
         if not role_name:
             role_name = f"{name}-ticket"
@@ -36,7 +48,7 @@ class SetupCog(commands.Cog):
     @setup_group.command(name="questions", description="Set questions for a category")
     @app_commands.describe(category="Category name", questions="Comma-separated list of questions")
     @app_commands.autocomplete(category=_category_autocomplete)
-    @app_commands.checks.has_permissions(administrator=True)
+    @_has_setup_access()
     async def setup_questions(self, interaction: discord.Interaction, category: str, questions: str):
         q_list = [q.strip() for q in questions.split(",") if q.strip()]
         try:
@@ -46,23 +58,19 @@ class SetupCog(commands.Cog):
             await interaction.response.send_message(str(e), ephemeral=True)
 
     @setup_group.command(name="panel", description="Send the ticket creation panel")
-    @app_commands.checks.has_permissions(administrator=True)
+    @_has_setup_access()
     async def setup_panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        from cogs.tickets import TicketCategoryView
-        categories = self.bot.config_manager.get_categories()
-        if not categories:
-            await interaction.response.send_message("No ticket categories configured. Use `/setup category` first.", ephemeral=True)
-            return
+        from cogs.tickets import CreateTicketButton
         embed = discord.Embed(
             title="Support Tickets",
-            description="Select a category below to create a ticket.",
+            description="Click the button below to create a ticket.",
             color=discord.Color.green()
         )
-        await channel.send(embed=embed, view=TicketCategoryView(categories))
+        await channel.send(embed=embed, view=CreateTicketButton())
         await interaction.response.send_message(f"Panel sent to {channel.mention}.", ephemeral=True)
 
     @setup_group.command(name="stats", description="Set the stats channel")
-    @app_commands.checks.has_permissions(administrator=True)
+    @_has_setup_access()
     async def setup_stats(self, interaction: discord.Interaction, channel: discord.TextChannel):
         # Main stats message
         embed1 = discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
@@ -86,13 +94,19 @@ class SetupCog(commands.Cog):
         await interaction.response.send_message(f"Stats set up in {channel.mention}.", ephemeral=True)
 
     @setup_group.command(name="archive", description="Set the channel for archiving ticket attachments")
-    @app_commands.checks.has_permissions(administrator=True)
+    @_has_setup_access()
     async def setup_archive(self, interaction: discord.Interaction, channel: discord.TextChannel):
         self.bot.config_manager.set_archive_channel(channel.id)
         await interaction.response.send_message(
             f"Archive channel set to {channel.mention}. Ticket attachments will be saved here before channel deletion.",
             ephemeral=True,
         )
+
+    @setup_group.command(name="staffrole", description="Set the role used for leaderboard tracking (shows staff even with 0 tickets)")
+    @_has_setup_access()
+    async def setup_staff_role(self, interaction: discord.Interaction, role: discord.Role):
+        self.bot.config_manager.set_staff_role(role.id)
+        await interaction.response.send_message(f"Staff role set to {role.mention}. Leaderboards will include all members with this role.", ephemeral=True)
 
     @commands.command(name="ping")
     async def ping(self, ctx: commands.Context):

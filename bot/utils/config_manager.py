@@ -10,7 +10,8 @@ DEFAULT_CONFIG = {
     "stats_message_id": None,
     "stats_leaderboard_message_id": None,
     "stats_claims_leaderboard_message_id": None,
-    "archive_channel_id": None
+    "archive_channel_id": None,
+    "staff_role_id": None
 }
 
 
@@ -105,3 +106,12 @@ class ConfigManager:
             del cfg["categories"][name]
             self._save(cfg)
             self._config = cfg
+
+    def get_staff_role(self) -> Optional[int]:
+        return self.config.get("staff_role_id")
+
+    def set_staff_role(self, role_id: int):
+        cfg = self.config
+        cfg["staff_role_id"] = role_id
+        self._save(cfg)
+        self._config = cfg

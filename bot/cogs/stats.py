@@ -53,6 +53,14 @@ class StatsLeaderboardView(discord.ui.View):
 
         data = await self.bot.db.get_interaction_leaderboard(guild.id, since)
 
+        staff_role_id = self.bot.config_manager.get_staff_role()
+        if staff_role_id:
+            staff_role = guild.get_role(staff_role_id)
+            if staff_role:
+                for member in staff_role.members:
+                    if member.id not in data:
+                        data[member.id] = 0
+
         # Build description lines
         if not data:
             lines = ["No interactions yet."]
@@ -120,6 +128,14 @@ class ClaimsLeaderboardView(discord.ui.View):
 
         data = await self.bot.db.get_claims_leaderboard(guild.id, since)
 
+        staff_role_id = self.bot.config_manager.get_staff_role()
+        if staff_role_id:
+            staff_role = guild.get_role(staff_role_id)
+            if staff_role:
+                for member in staff_role.members:
+                    if member.id not in data:
+                        data[member.id] = 0
+
         if not data:
             lines = ["No claims yet."]
         else:
@@ -177,6 +193,8 @@ class StatsCog(commands.Cog):
             else:
                 open_count = await self.bot.db.get_open_tickets_count(guild.id)
                 staff_loads = await self.bot.db.get_staff_loads(guild.id)
+                unclaimed = await self.bot.db.get_unclaimed_tickets(guild.id)
+
                 lines = [f"Open Tickets: {open_count}", "Staff Loads:"]
                 if staff_loads:
                     for uid, count in sorted(staff_loads.items(), key=lambda x: -x[1]):
@@ -185,6 +203,18 @@ class StatsCog(commands.Cog):
                         lines.append(f"{name} — {count}")
                 else:
                     lines.append("None")
+
+                if unclaimed:
+                    lines.append("")
+                    lines.append(f"**Unclaimed Tickets ({len(unclaimed)}):**")
+                    for ticket in unclaimed[:10]:
+                        channel = guild.get_channel(ticket["channel_id"])
+                        creator = guild.get_member(ticket["creator_id"])
+                        chan_str = channel.mention if channel else f"#{ticket['channel_id']}"
+                        creator_str = creator.mention if creator else f"<@{ticket['creator_id']}>"
+                        lines.append(f"• {chan_str} ({ticket['category']}) by {creator_str}")
+                    if len(unclaimed) > 10:
+                        lines.append(f"*...and {len(unclaimed) - 10} more*")
                 embed = discord.Embed(title="Ticket Stats", description="\n".join(lines), color=discord.Color.purple())
                 await msg.edit(embed=embed)
 
