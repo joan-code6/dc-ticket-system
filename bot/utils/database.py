@@ -192,6 +192,14 @@ class Database:
                     loads[uid] = loads.get(uid, 0) + 1
             return loads
 
+    async def get_unclaimed_tickets(self, guild_id: int) -> List[Dict[str, Any]]:
+        async with self.conn.execute(
+            "SELECT id, channel_id, creator_id, category FROM tickets WHERE guild_id = ? AND status = 'open' AND assigned_ids = '[]' ORDER BY created_at ASC",
+            (guild_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
     async def search_tickets(self, guild_id: int, **filters) -> List[Dict[str, Any]]:
         query = "SELECT * FROM tickets WHERE guild_id = ? AND status = 'closed'"
         params = [guild_id]

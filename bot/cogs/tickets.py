@@ -191,6 +191,8 @@ class TicketActionView(ui.View):
             await interaction.response.send_message("You are already assigned to this ticket.", ephemeral=True)
             return
 
+        await interaction.response.defer()
+
         assigned.append(interaction.user.id)
         await bot.db.update_ticket_assigned(ticket["id"], assigned)
         ticket["assigned_ids"] = json.dumps(assigned)
@@ -217,7 +219,7 @@ class TicketActionView(ui.View):
         if stats_cog:
             await stats_cog.update_stats(interaction.guild)
 
-        await interaction.response.send_message(f"{interaction.user.mention} has been assigned to this ticket.")
+        await interaction.followup.send(f"{interaction.user.mention} has been assigned to this ticket.")
 
 
 class CreateTicketButton(ui.View):
