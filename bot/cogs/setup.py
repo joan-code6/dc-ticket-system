@@ -61,9 +61,11 @@ class SetupCog(commands.Cog):
     @_has_setup_access()
     async def setup_panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         from cogs.tickets import CreateTicketButton
+        title = self.bot.config_manager.get_panel_title()
+        description = self.bot.config_manager.get_panel_description()
         embed = discord.Embed(
-            title="Support Tickets",
-            description="Click the button below to create a ticket.",
+            title=title,
+            description=description,
             color=discord.Color.purple()
         )
         await channel.send(embed=embed, view=CreateTicketButton())

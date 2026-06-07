@@ -17,6 +17,7 @@ class TicketCategorySelect(ui.Select):
     def __init__(self, categories: dict):
         options = []
         for name in categories.keys():
+            cfg = categories[name]
             match = re.match(r'^<(a?:)?(\w+):(\d+)>\s*(.*)', name)
             if match:
                 emoji_name = match.group(2)
@@ -26,8 +27,9 @@ class TicketCategorySelect(ui.Select):
             else:
                 label = name
                 emoji = None
+            description = cfg.get("description", f"Create a {label} ticket")
             options.append(
-                discord.SelectOption(label=label, value=name, emoji=emoji, description=f"Create a {label} ticket")
+                discord.SelectOption(label=label, value=name, emoji=emoji, description=description)
             )
         super().__init__(placeholder="Choose a ticket category...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
         self.categories = categories

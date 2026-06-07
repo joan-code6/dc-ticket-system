@@ -7,7 +7,7 @@ CONFIG_PATH = "bot/config.json"
 DEFAULT_CONFIG = {
     "categories": {},
     "panel_title": "Support Tickets",
-    "panel_description": "Click the button below to create a ticket.",
+    "panel_description": ["Click the button below to create a ticket."],
     "stats_channel_id": None,
     "stats_message_id": None,
     "stats_leaderboard_message_id": None,
@@ -115,5 +115,21 @@ class ConfigManager:
     def set_staff_role(self, role_id: int):
         cfg = self.config
         cfg["staff_role_id"] = role_id
+        self._save(cfg)
+        self._config = cfg
+
+    def get_panel_title(self) -> str:
+        return self.config.get("panel_title", "Support Tickets")
+
+    def get_panel_description(self) -> str:
+        desc = self.config.get("panel_description", ["Click the button below to create a ticket."])
+        if isinstance(desc, list):
+            return "\n".join(desc)
+        return desc
+
+    def set_panel_text(self, title: str, description: str):
+        cfg = self.config
+        cfg["panel_title"] = title
+        cfg["panel_description"] = description.split("\n") if description else []
         self._save(cfg)
         self._config = cfg
