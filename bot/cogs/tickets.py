@@ -231,7 +231,7 @@ class CreateTicketButton(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Create Ticket", style=discord.ButtonStyle.primary, emoji="🎫", custom_id="create_ticket_button")
+    @ui.button(label="Create Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id="create_ticket_button")
     async def create_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         categories = bot.config_manager.get_categories()

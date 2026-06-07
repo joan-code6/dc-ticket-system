@@ -64,7 +64,7 @@ class SetupCog(commands.Cog):
         embed = discord.Embed(
             title="Support Tickets",
             description="Click the button below to create a ticket.",
-            color=discord.Color.green()
+            color=discord.Color.purple()
         )
         await channel.send(embed=embed, view=CreateTicketButton())
         await interaction.response.send_message(f"Panel sent to {channel.mention}.", ephemeral=True)
