@@ -180,9 +180,15 @@ class CategoryPingSelect(discord.ui.Select):
                 label = name
                 emoji = None
             options.append(discord.SelectOption(label=label, value=name, emoji=emoji))
+        if not options:
+            options.append(discord.SelectOption(label="No categories configured", value="__none__"))
         super().__init__(placeholder="Select categories to get pinged for...", min_values=0, max_values=len(options), options=options, custom_id="category_ping_select")
 
     async def callback(self, interaction: discord.Interaction):
+        if "__none__" in (self.values or []):
+            await interaction.response.send_message("No ping categories are configured.", ephemeral=True)
+            return
+
         member = interaction.user
         if not isinstance(member, discord.Member):
             await interaction.response.send_message("This can only be used in a server.", ephemeral=True)

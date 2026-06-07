@@ -113,9 +113,12 @@ class SetupCog(commands.Cog):
     @setup_group.command(name="dashboard", description="Set the ticket dashboard channel (stats + ping role selector)")
     @_has_setup_access()
     async def setup_dashboard(self, interaction: discord.Interaction, channel: discord.TextChannel):
-        from cogs.stats import CategoryPingView, StatsCog
-        stats_cog = self.bot.get_cog("StatsCog")
-        embed = await stats_cog._build_stats_embed(interaction.guild) if stats_cog else discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
+        from cogs.stats import CategoryPingView
+        try:
+            stats_cog = self.bot.get_cog("StatsCog")
+            embed = await stats_cog._build_stats_embed(interaction.guild) if stats_cog else discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
+        except Exception:
+            embed = discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
         view = CategoryPingView(self.bot)
         msg = await channel.send(embed=embed, view=view)
         self.bot.config_manager.set_dashboard(channel.id, msg.id)

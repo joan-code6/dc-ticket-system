@@ -132,9 +132,16 @@ class TicketQuestionsModal(ui.Modal):
         self.category = category
         self.on_submit_callback = on_submit_callback
         self.question_map = {}
-        for i, question in enumerate(questions[:5]):
-            text_input = ui.TextInput(label=question[:45], style=discord.TextStyle.short, required=False, custom_id=f"q{i}")
-            self.question_map[f"q{i}"] = question[:45]
+        for i, q in enumerate(questions[:5]):
+            if isinstance(q, dict):
+                text = q.get("text", "")
+                required = q.get("required", False)
+            else:
+                text = q
+                required = False
+            label = text[:45]
+            text_input = ui.TextInput(label=label, style=discord.TextStyle.short, required=required, custom_id=f"q{i}")
+            self.question_map[f"q{i}"] = label
             self.add_item(text_input)
 
     async def on_submit(self, interaction: discord.Interaction):
