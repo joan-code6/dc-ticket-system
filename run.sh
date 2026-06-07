@@ -3,7 +3,7 @@
 # Restarts the bot automatically when Python/JSON files change in bot/
 
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Load token from .env
 if [ -f ".env" ]; then
@@ -18,12 +18,17 @@ if [ -z "${DISCORD_BOT_TOKEN:-}" ]; then
     exit 1
 fi
 
-if ! command -v python &>/dev/null && ! command -v python3 &>/dev/null; then
+# Use venv if available
+if [ -f "venv/bin/python3" ]; then
+    PYTHON="venv/bin/python3"
+elif command -v python3 &>/dev/null; then
+    PYTHON=$(command -v python3)
+elif command -v python &>/dev/null; then
+    PYTHON=$(command -v python)
+else
     echo "Error: Python is not installed or not in PATH."
     exit 1
 fi
-
-PYTHON=$(command -v python3 || command -v python)
 
 echo "Starting bot with auto-reload on file changes..."
 echo "Watching: bot/**/*.py"
