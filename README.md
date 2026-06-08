@@ -16,6 +16,7 @@ A full-featured ticket system built with `discord.py`. Create tickets via a butt
   - [6. Set the transcript log channel](#6-set-the-transcript-log-channel)
   - [7. Set up the dashboard](#7-set-up-the-dashboard)
   - [8. Set the staff role (optional)](#8-set-the-staff-role-optional)
+  - [9. Set up the ticket utilization panel](#9-set-up-the-ticket-utilization-panel)
   - [Managing categories](#managing-categories)
 - [Moderator Usage](#moderator-usage)
   - [Quick actions (buttons)](#quick-actions-buttons)
@@ -158,6 +159,30 @@ Assign an existing Discord role to be tracked on the leaderboards. Members with 
 /setup staffrole role:<@role>
 ```
 
+### 9. Set up the ticket utilization panel
+
+Creates a live status panel that shows current support workload as a percentage bar. Useful for setting expectations with users about response times.
+
+```
+/setup ticket-utilization channel:<#channel> max_tickets:<number>
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `channel` | Yes | The channel to send the panel to |
+| `max_tickets` | Yes | Maximum tickets before 100% utilization |
+
+The panel updates automatically and shows:
+
+| Utilization | Indicator | Color | Status |
+|-------------|-----------|-------|--------|
+| < 50% | Green | Green | Support team is available |
+| 50–74% | Yellow | Gold | A bit busy, will get to you soon |
+| 75–89% | Orange | Orange | High volume, longer response times |
+| 90%+ | Red | Red | Extreme load, expect delays |
+
+The embed includes a 20-segment progress bar, current ticket count, and a date-aware footer ("Today", "Yesterday", or the full date). The panel refreshes automatically alongside the stats channel.
+
 ### Managing categories
 
 - **Add more categories:** Run `/setup category` again with a different name.
@@ -246,7 +271,7 @@ Renames the ticket channel. The opening embed is not affected — only the chann
 
 Or click the **Close Ticket** button in the ticket channel.
 
-1. Saves the **entire channel transcript** (every message, including attachments) to the database.
+1. Marks the ticket as closed. Transcripts are recorded in **real-time** as messages are sent — nothing is lost if the bot restarts before close.
 2. **Locks the channel** — the ticket creator can no longer send messages, but staff can still type.
 3. Posts the close reason.
 4. Displays **Delete** and **Reopen** buttons below the close message.
@@ -274,7 +299,7 @@ The bot automatically monitors assigned tickets for staff inactivity. If no staf
 
 ## Transcripts
 
-Closed ticket transcripts are saved automatically. Use the following commands to retrieve them.
+Closed ticket transcripts are saved automatically in real-time as messages are sent. Edits to messages are also captured. Use the following commands to retrieve them.
 
 ### Searching transcripts
 
