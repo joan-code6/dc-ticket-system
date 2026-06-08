@@ -13,16 +13,26 @@ from utils.date_parser import parse_date_input, get_date_choices
 
 
 class TranscriptView(discord.ui.View):
-    def __init__(self, pages: list):
+    def __init__(self, pages: list, ticket_id: int):
         super().__init__(timeout=180)
         self.pages = pages
+        self.ticket_id = ticket_id
         self.current = 0
+        self._update_embed_title()
+
+    def _update_embed_title(self):
+        embed = self.pages[self.current]
+        embed.title = f"Transcript #{self.ticket_id} (Page {self.current + 1}/{len(self.pages)})"
+
+    async def _show_page(self, interaction: discord.Interaction):
+        self._update_embed_title()
+        await interaction.response.edit_message(embed=self.pages[self.current])
 
     @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
     async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.current > 0:
             self.current -= 1
-            await interaction.response.edit_message(embed=self.pages[self.current])
+            await self._show_page(interaction)
         else:
             await interaction.response.defer()
 
@@ -30,7 +40,7 @@ class TranscriptView(discord.ui.View):
     async def next_page(self, interaction: discord.Interaction, button: discord.ui.Button):
         if self.current < len(self.pages) - 1:
             self.current += 1
-            await interaction.response.edit_message(embed=self.pages[self.current])
+            await self._show_page(interaction)
         else:
             await interaction.response.defer()
 
@@ -131,7 +141,7 @@ class TranscriptsCog(commands.Cog):
             line += "\n"
 
             if chunk_size + len(line) > 3900:
-                embed = discord.Embed(title=f"Transcript #{ticket_id} (Page {len(pages)+1})", description="".join(chunk), color=discord.Color.greyple())
+                embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
                 pages.append(embed)
                 chunk = [line]
                 chunk_size = len(line)
@@ -140,13 +150,13 @@ class TranscriptsCog(commands.Cog):
                 chunk_size += len(line)
 
         if chunk:
-            embed = discord.Embed(title=f"Transcript #{ticket_id} (Page {len(pages)+1})", description="".join(chunk), color=discord.Color.greyple())
+            embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
             pages.append(embed)
 
         if len(pages) == 1:
             await interaction.response.send_message(embed=pages[0], ephemeral=True)
         else:
-            await interaction.response.send_message(embed=pages[0], view=TranscriptView(pages), ephemeral=True)
+            await interaction.response.send_message(embed=pages[0], view=TranscriptView(pages, ticket_id), ephemeral=True)
 
 async def setup(bot: "TicketBot"):
     await bot.add_cog(TranscriptsCog(bot))
