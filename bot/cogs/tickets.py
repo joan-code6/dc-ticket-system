@@ -374,6 +374,31 @@ class TicketsCog(commands.Cog):
         self.bot = bot
 
     @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if not message.guild:
+            return
+        ticket = await self.bot.db.get_ticket_by_channel(message.channel.id)
+        if not ticket:
+            return
+        attachments = [a.url for a in message.attachments]
+        await self.bot.db.add_transcript_message(
+            ticket["id"], message.id, message.author.id, message.author.display_name,
+            message.content, message.created_at, attachments
+        )
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        if not after.guild:
+            return
+        ticket = await self.bot.db.get_ticket_by_channel(after.channel.id)
+        if not ticket:
+            return
+        attachments = [a.url for a in after.attachments]
+        await self.bot.db.update_transcript_message_content(
+            ticket["id"], after.id, after.content, attachments
+        )
+
+    @commands.Cog.listener()
     async def on_ready(self):
         self.bot.add_view(CreateTicketButton())
         self.bot.add_view(TicketActionView())

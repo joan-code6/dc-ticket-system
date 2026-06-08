@@ -62,6 +62,13 @@ class Database:
             );
         """)
         await self.conn.commit()
+        await self.conn.execute(
+            "DELETE FROM transcript_messages WHERE id NOT IN (SELECT MIN(id) FROM transcript_messages GROUP BY ticket_id, message_id)"
+        )
+        await self.conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_transcript_ticket_message ON transcript_messages(ticket_id, message_id)"
+        )
+        await self.conn.commit()
         try:
             await self.conn.execute("ALTER TABLE tickets ADD COLUMN last_reminder_at TEXT")
             await self.conn.commit()
@@ -129,8 +136,16 @@ class Database:
                                      author_name: str, content: str, timestamp: datetime,
                                      attachments: List[str]):
         await self.conn.execute(
-            "INSERT INTO transcript_messages (ticket_id, message_id, author_id, author_name, content, timestamp, attachments_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO transcript_messages (ticket_id, message_id, author_id, author_name, content, timestamp, attachments_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
             (ticket_id, message_id, author_id, author_name, content, timestamp.isoformat(), json.dumps(attachments))
+        )
+        await self.conn.commit()
+
+    async def update_transcript_message_content(self, ticket_id: int, message_id: int,
+                                                content: str, attachments: List[str]):
+        await self.conn.execute(
+            "UPDATE transcript_messages SET content = ?, attachments_json = ? WHERE ticket_id = ? AND message_id = ?",
+            (content, json.dumps(attachments), ticket_id, message_id)
         )
         await self.conn.commit()
 
