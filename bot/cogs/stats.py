@@ -335,6 +335,61 @@ class StatsCog(commands.Cog):
                     embed = await self._build_stats_embed(guild)
                     await dash_msg.edit(embed=embed, view=CategoryPingView(self.bot))
 
+        # Update ticket utilization message
+        util_channel_id = self.bot.config_manager.get_ticket_utilization_channel()
+        util_message_id = self.bot.config_manager.get_ticket_utilization_message()
+        if util_channel_id and util_message_id:
+            util_channel = guild.get_channel(util_channel_id)
+            if util_channel:
+                try:
+                    util_msg = await util_channel.fetch_message(util_message_id)
+                except discord.NotFound:
+                    pass
+                else:
+                    open_count = await self.bot.db.get_open_tickets_count(guild.id)
+                    max_tickets = self.bot.config_manager.get_ticket_utilization_max_tickets()
+                    embed = self._build_utilization_embed(open_count, max_tickets)
+                    await util_msg.edit(embed=embed)
+
+    @staticmethod
+    def _build_utilization_embed(open_count: int, max_tickets: int) -> discord.Embed:
+        pct = min(open_count / max_tickets * 100, 100) if max_tickets > 0 else 0
+        filled = round(pct / 5)
+        empty = 20 - filled
+        bar = "█" * filled + "░" * empty
+
+        if pct <= 33:
+            indicator = "🟢"
+            status = "✅ Our support team is available and ready to help you!"
+        elif pct <= 66:
+            indicator = "🟡"
+            status = "⚠️ Support is experiencing higher than normal volume. Response times may be slower."
+        elif pct <= 90:
+            indicator = "🟠"
+            status = "🔶 Support is very busy right now. Please be patient!"
+        else:
+            indicator = "🔴"
+            status = "🚨 We are currently overwhelmed! Delays are expected. Please avoid creating duplicate tickets."
+
+        now = datetime.now().strftime("%H:%M:%S")
+
+        embed = discord.Embed(
+            title="📊 Ticket Support Utilization",
+            color=discord.Color.blurple()
+        )
+        embed.add_field(
+            name=f"{indicator} Utilization",
+            value=f"`[{bar}]` **{pct:.1f}%**\n{open_count} / {max_tickets} Tickets",
+            inline=False
+        )
+        embed.add_field(
+            name="📝 Status",
+            value=status,
+            inline=False
+        )
+        embed.set_footer(text=f"Updates automatically  •  Last Update Today at {now}")
+        return embed
+
     async def get_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
         view = StatsLeaderboardView(self.bot)
         return await view.refresh(guild)

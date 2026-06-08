@@ -1,6 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
+from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -132,6 +133,62 @@ class SetupCog(commands.Cog):
             f"Transcript log channel set to {channel.mention}. Ticket summaries will be posted here after deletion.",
             ephemeral=True,
         )
+
+    @setup_group.command(name="ticket-utilization", description="Set up a live ticket utilization status panel")
+    @app_commands.describe(
+        channel="Channel to send the utilization panel",
+        max_tickets="Maximum tickets before 100% utilization"
+    )
+    @_has_setup_access()
+    async def setup_ticket_utilization(self, interaction: discord.Interaction, channel: discord.TextChannel, max_tickets: int):
+        if max_tickets < 1:
+            await interaction.response.send_message("Max tickets must be at least 1.", ephemeral=True)
+            return
+
+        open_count = await self.bot.db.get_open_tickets_count(interaction.guild_id)
+        embed = self._build_utilization_embed(open_count, max_tickets)
+        msg = await channel.send(embed=embed)
+        self.bot.config_manager.set_ticket_utilization(channel.id, msg.id, max_tickets)
+        await interaction.response.send_message(f"Ticket utilization panel set up in {channel.mention}.", ephemeral=True)
+
+    @staticmethod
+    def _build_utilization_embed(open_count: int, max_tickets: int) -> discord.Embed:
+        pct = min(open_count / max_tickets * 100, 100) if max_tickets > 0 else 0
+        filled = round(pct / 5)
+        empty = 20 - filled
+        bar = "█" * filled + "░" * empty
+
+        if pct <= 33:
+            indicator = "🟢"
+            status = "✅ Our support team is available and ready to help you!"
+        elif pct <= 66:
+            indicator = "🟡"
+            status = "⚠️ Support is experiencing higher than normal volume. Response times may be slower."
+        elif pct <= 90:
+            indicator = "🟠"
+            status = "🔶 Support is very busy right now. Please be patient!"
+        else:
+            indicator = "🔴"
+            status = "🚨 We are currently overwhelmed! Delays are expected. Please avoid creating duplicate tickets."
+
+        now = datetime.now().strftime("%H:%M:%S")
+
+        embed = discord.Embed(
+            title="📊 Ticket Support Utilization",
+            color=discord.Color.blurple()
+        )
+        embed.add_field(
+            name=f"{indicator} Utilization",
+            value=f"`[{bar}]` **{pct:.1f}%**\n{open_count} / {max_tickets} Tickets",
+            inline=False
+        )
+        embed.add_field(
+            name="📝 Status",
+            value=status,
+            inline=False
+        )
+        embed.set_footer(text=f"Updates automatically  •  Last Update Today at {now}")
+        return embed
 
     @commands.command(name="ping")
     async def ping(self, ctx: commands.Context):

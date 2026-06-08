@@ -16,7 +16,10 @@ DEFAULT_CONFIG = {
     "staff_role_id": None,
     "dashboard_channel_id": None,
     "dashboard_message_id": None,
-    "transcript_channel_id": None
+    "transcript_channel_id": None,
+    "ticket_utilization_channel_id": None,
+    "ticket_utilization_message_id": None,
+    "ticket_utilization_max_tickets": 40
 }
 
 
@@ -156,5 +159,22 @@ class ConfigManager:
     def set_transcript_channel(self, channel_id: int):
         cfg = self.config
         cfg["transcript_channel_id"] = channel_id
+        self._save(cfg)
+        self._config = cfg
+
+    def get_ticket_utilization_channel(self) -> Optional[int]:
+        return self.config.get("ticket_utilization_channel_id")
+
+    def get_ticket_utilization_message(self) -> Optional[int]:
+        return self.config.get("ticket_utilization_message_id")
+
+    def get_ticket_utilization_max_tickets(self) -> int:
+        return self.config.get("ticket_utilization_max_tickets", 40)
+
+    def set_ticket_utilization(self, channel_id: int, message_id: int, max_tickets: int):
+        cfg = self.config
+        cfg["ticket_utilization_channel_id"] = channel_id
+        cfg["ticket_utilization_message_id"] = message_id
+        cfg["ticket_utilization_max_tickets"] = max_tickets
         self._save(cfg)
         self._config = cfg
