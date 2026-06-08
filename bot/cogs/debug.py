@@ -1,6 +1,7 @@
 import io
 import json
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 import discord
@@ -9,6 +10,8 @@ from discord.ext import commands
 
 if TYPE_CHECKING:
     from main import TicketBot
+
+_log = logging.getLogger(__name__)
 
 SETUP_BYPASS_ROLE = 1314666319035240579
 
@@ -40,7 +43,7 @@ class DebugCog(commands.Cog):
         self.bot = bot
 
     async def cog_load(self):
-        print(f"[debug] DebugCog loaded, registered commands: {[c.qualified_name for c in self.bot.tree.walk_commands() if 'debug' in c.qualified_name]}")
+        _log.info("DebugCog loaded, registered commands: %s", [c.qualified_name for c in self.bot.tree.walk_commands() if 'debug' in c.qualified_name])
 
     debug_group = app_commands.Group(name="debug", description="Debug utilities")
 

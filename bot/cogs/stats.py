@@ -68,7 +68,7 @@ class StatsLeaderboardView(discord.ui.View):
         else:
             lines = []
             sorted_data = sorted(data.items(), key=lambda x: -x[1])
-            for i, (uid, count) in enumerate(sorted_data[:15]):
+            for i, (uid, count) in enumerate(sorted_data):
                 member = guild.get_member(uid)
                 name = member.display_name if member else f"Unknown ({uid})"
                 label = "ticket" if count == 1 else "tickets"
@@ -142,7 +142,7 @@ class ClaimsLeaderboardView(discord.ui.View):
         else:
             lines = []
             sorted_data = sorted(data.items(), key=lambda x: -x[1])
-            for i, (uid, count) in enumerate(sorted_data[:15]):
+            for i, (uid, count) in enumerate(sorted_data):
                 member = guild.get_member(uid)
                 name = member.display_name if member else f"Unknown ({uid})"
                 label = "ticket" if count == 1 else "tickets"
