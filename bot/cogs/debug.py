@@ -39,10 +39,12 @@ class DebugCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
 
+    async def cog_load(self):
+        print(f"[debug] DebugCog loaded, registered commands: {[c.qualified_name for c in self.bot.tree.walk_commands() if 'debug' in c.qualified_name]}")
+
     debug_group = app_commands.Group(name="debug", description="Debug utilities")
 
     @debug_group.command(name="copy-config", description="Send the current config.json as a downloadable file")
-    @_has_debug_access()
     async def debug_copy_config(self, interaction: discord.Interaction):
         config_json = json.dumps(self.bot.config_manager.config, indent=2)
         file = discord.File(io.BytesIO(config_json.encode()), filename="config.json")
@@ -53,7 +55,6 @@ class DebugCog(commands.Cog):
         )
 
     @debug_group.command(name="paste-config", description="Replace the config by pasting JSON in this DM")
-    @_has_debug_access()
     async def debug_paste_config(self, interaction: discord.Interaction):
         if not isinstance(interaction.channel, discord.DMChannel):
             await interaction.response.send_message(
