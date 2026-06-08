@@ -175,9 +175,9 @@ class SetupCog(commands.Cog):
 
         description = (
             f"{indicator} Utilization\n"
-            f"[{bar}] {pct:.1f}%\n"
+            f"`[{bar}]` {pct:.1f}%\n"
             f"{open_count} / {max_tickets} Tickets\n\n"
-            f"📝 Status\n"
+            f"**📝 Status**\n"
             f"{status}"
         )
 
