@@ -374,9 +374,9 @@ class StatsCog(commands.Cog):
         now = datetime.now().strftime("%H:%M:%S")
 
         description = (
-            f"{indicator} Utilization\n"
-            f"`[{bar}]` {pct:.1f}%\n"
-            f"{open_count} / {max_tickets} Tickets\n\n"
+            f"**{indicator} Utilization**\n"
+            f"`[{bar}]` {pct:.1f}%\n\n"
+            f"**{open_count} / {max_tickets} Tickets**\n\n"
             f"**📝 Status**\n"
             f"{status}"
         )
@@ -384,7 +384,7 @@ class StatsCog(commands.Cog):
         embed = discord.Embed(
             title="📊 Ticket Support Utilization",
             description=description,
-            color=discord.Color.blurple()
+            color=0x2ECC71
         )
         embed.set_footer(text=f"Updates automatically  •  Last Update Today at {now}")
         return embed
