@@ -173,19 +173,18 @@ class SetupCog(commands.Cog):
 
         now = datetime.now().strftime("%H:%M:%S")
 
+        description = (
+            f"{indicator} Utilization\n"
+            f"[{bar}] {pct:.1f}%\n"
+            f"{open_count} / {max_tickets} Tickets\n\n"
+            f"📝 Status\n"
+            f"{status}"
+        )
+
         embed = discord.Embed(
             title="📊 Ticket Support Utilization",
+            description=description,
             color=discord.Color.blurple()
-        )
-        embed.add_field(
-            name=f"{indicator} Utilization",
-            value=f"`[{bar}]` **{pct:.1f}%**\n{open_count} / {max_tickets} Tickets",
-            inline=False
-        )
-        embed.add_field(
-            name="📝 Status",
-            value=status,
-            inline=False
         )
         embed.set_footer(text=f"Updates automatically  •  Last Update Today at {now}")
         return embed
