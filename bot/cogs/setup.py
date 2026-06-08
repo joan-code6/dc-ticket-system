@@ -1,7 +1,7 @@
 import discord
 from discord import app_commands
 from discord.ext import commands
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
@@ -158,35 +158,49 @@ class SetupCog(commands.Cog):
         empty = 20 - filled
         bar = "█" * filled + "░" * empty
 
-        if pct <= 33:
+        if pct < 50:
             indicator = "🟢"
+            embed_color = discord.Color.green()
             status = "✅ Our support team is available and ready to help you!"
-        elif pct <= 66:
+        elif pct < 75:
             indicator = "🟡"
-            status = "⚠️ Support is experiencing higher than normal volume. Response times may be slower."
-        elif pct <= 90:
+            embed_color = discord.Color.gold()
+            status = "⏳ We're a bit busy, but we'll get to you soon!"
+        elif pct < 90:
             indicator = "🟠"
-            status = "🔶 Support is very busy right now. Please be patient!"
+            embed_color = discord.Color.orange()
+            status = "⚠️ High ticket volume. Response times may be longer than usual."
         else:
             indicator = "🔴"
-            status = "🚨 We are currently overwhelmed! Delays are expected. Please avoid creating duplicate tickets."
+            embed_color = discord.Color.red()
+            status = "🔴 We are currently experiencing high ticket rates. It might take time till our Moderators will be there to support you."
 
-        now = datetime.now().strftime("%H:%M:%S")
+        now = discord.utils.utcnow()
+        today = now.date()
+        yesterday = today - timedelta(days=1)
 
-        description = (
-            f"**{indicator} Utilization**\n"
-            f"`[{bar}]` {pct:.1f}%\n\n"
-            f"**{open_count} / {max_tickets} Tickets**\n\n"
-            f"**📝 Status**\n"
-            f"{status}"
-        )
+        if now.date() == today:
+            date_str = "Today"
+        elif now.date() == yesterday:
+            date_str = "Yesterday"
+        else:
+            date_str = now.strftime("%B %d, %Y")
 
         embed = discord.Embed(
             title="📊 Ticket Support Utilization",
-            description=description,
-            color=0x2ECC71
+            color=embed_color
         )
-        embed.set_footer(text=f"Updates automatically  •  Last Update Today at {now}")
+        embed.add_field(
+            name=f"{indicator} Utilization",
+            value=f"```\n[{bar}] {pct:.1f}%\n```\n**{open_count}** / {max_tickets} Tickets",
+            inline=False
+        )
+        embed.add_field(
+            name="📝 Status",
+            value=status,
+            inline=False
+        )
+        embed.set_footer(text=f"Updates automatically · Last Update {date_str} at {now.strftime('%H:%M:%S')}")
         return embed
 
     @commands.command(name="ping")
