@@ -167,6 +167,22 @@ class Database:
 
         await self.conn.commit()
 
+    async def get_user_message_counts(self, ticket_id: int) -> List[Dict[str, Any]]:
+        async with self.conn.execute(
+            "SELECT author_id, author_name, COUNT(*) as count FROM transcript_messages WHERE ticket_id = ? GROUP BY author_id ORDER BY count DESC",
+            (ticket_id,)
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_ticket_closer(self, ticket_id: int) -> int | None:
+        async with self.conn.execute(
+            "SELECT user_id FROM ticket_logs WHERE ticket_id = ? AND action = 'close' ORDER BY timestamp DESC LIMIT 1",
+            (ticket_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            return row["user_id"] if row else None
+
     async def get_transcript_messages(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM transcript_messages WHERE ticket_id = ? ORDER BY timestamp ASC",

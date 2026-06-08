@@ -2,6 +2,7 @@ import discord
 from discord import ui
 from discord.ext import commands
 from typing import TYPE_CHECKING
+from datetime import datetime, timezone
 import json
 import re
 
@@ -10,6 +11,19 @@ if TYPE_CHECKING:
 
 from utils.archive import archive_attachments
 from utils.checks import check_staff_role
+
+
+def _format_discord_time(ts_str: str | None) -> str | None:
+    if not ts_str:
+        return None
+    try:
+        if "T" in ts_str:
+            dt = datetime.fromisoformat(ts_str)
+        else:
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+        return f"<t:{int(dt.timestamp())}:R>"
+    except Exception:
+        return ts_str
 
 
 async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Guild) -> discord.Embed:
@@ -32,14 +46,29 @@ async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Gu
         assigned_text = ", ".join(mentions)
     embed.add_field(name="Assigned Staff", value=assigned_text, inline=False)
 
-    created = ticket["created_at"]
-    closed = ticket["closed_at"]
-    embed.add_field(name="Created", value=created or "Unknown", inline=True)
-    embed.add_field(name="Closed", value=closed or "Unknown", inline=True)
+    created_str = _format_discord_time(ticket["created_at"])
+    closed_str = _format_discord_time(ticket["closed_at"])
+    embed.add_field(name="Created", value=created_str or "Unknown", inline=True)
+    embed.add_field(name="Closed", value=closed_str or "Unknown", inline=True)
+
+    closer_id = await bot.db.get_ticket_closer(ticket["id"])
+    if closer_id:
+        closer = guild.get_member(closer_id)
+        embed.add_field(name="Closed by", value=closer.mention if closer else f"<@{closer_id}>", inline=True)
 
     close_reason = ticket.get("close_reason")
     if close_reason:
         embed.add_field(name="Close Reason", value=close_reason, inline=False)
+
+    user_counts = await bot.db.get_user_message_counts(ticket["id"])
+    if user_counts:
+        lines = []
+        for uc in user_counts:
+            author_id = uc["author_id"]
+            author_name = uc["author_name"]
+            count = uc["count"]
+            lines.append(f"`{count}` - <@{author_id}> - {author_name}")
+        embed.add_field(name="Users in Transcript", value="\n".join(lines), inline=False)
 
     embed.add_field(
         name="Full Transcript",
