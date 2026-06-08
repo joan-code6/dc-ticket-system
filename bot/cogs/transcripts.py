@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from main import TicketBot
 
 from utils.checks import has_staff_role
+from utils.date_parser import parse_date_input, get_date_choices
 
 
 class TranscriptView(discord.ui.View):
@@ -44,8 +45,8 @@ class TranscriptsCog(commands.Cog):
     @app_commands.describe(
         user="Filter by user",
         category="Filter by category",
-        after="ISO date after",
-        before="ISO date before"
+        after="Show tickets after — e.g. 7d, yesterday, June 8 2026",
+        before="Show tickets before — e.g. 7d, yesterday, June 8 2026"
     )
     @app_commands.check(has_staff_role)
     async def transcript_search(
@@ -62,9 +63,23 @@ class TranscriptsCog(commands.Cog):
         if category:
             filters["category"] = category
         if after:
-            filters["after"] = after
+            parsed = parse_date_input(after, end_of_day=False)
+            if parsed is None:
+                await interaction.response.send_message(
+                    f"Invalid date: `{after}`. Try `7d`, `yesterday`, `today`, `2026-06-01`, or `June 8 2026`.",
+                    ephemeral=True,
+                )
+                return
+            filters["after"] = parsed
         if before:
-            filters["before"] = before
+            parsed = parse_date_input(before, end_of_day=True)
+            if parsed is None:
+                await interaction.response.send_message(
+                    f"Invalid date: `{before}`. Try `7d`, `yesterday`, `today`, `2026-06-01`, or `June 8 2026`.",
+                    ephemeral=True,
+                )
+                return
+            filters["before"] = parsed
 
         results = await self.bot.db.search_tickets(interaction.guild_id, **filters)
         if not results:
@@ -81,6 +96,11 @@ class TranscriptsCog(commands.Cog):
 
         embed = discord.Embed(title="Ticket Search Results", description="\n".join(lines), color=discord.Color.blue())
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @transcript_search.autocomplete("after")
+    @transcript_search.autocomplete("before")
+    async def _date_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        return get_date_choices(current)
 
     @transcript_group.command(name="view", description="View a transcript by ticket ID")
     @app_commands.describe(ticket_id="Ticket ID")
