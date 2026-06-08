@@ -52,6 +52,10 @@ class ConfigManager:
     def reload(self):
         self._config = self._load()
 
+    def replace_config(self, new_config: Dict[str, Any]):
+        self._save(new_config)
+        self._config = new_config
+
     def get_category(self, name: str) -> Optional[Dict[str, Any]]:
         return self.config.get("categories", {}).get(name)
 
