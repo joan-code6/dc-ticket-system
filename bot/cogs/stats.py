@@ -21,8 +21,14 @@ class StatsLeaderboardView(discord.ui.View):
         self.bot = bot
         self.current_view = 0
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, custom_id="stats_leaderboard_prev")
-    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="◀",
+        style=discord.ButtonStyle.secondary,
+        custom_id="stats_leaderboard_prev",
+    )
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         if self.current_view > 0:
             self.current_view -= 1
         else:
@@ -30,8 +36,14 @@ class StatsLeaderboardView(discord.ui.View):
         embed = await self._build_embed(interaction.guild)
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, custom_id="stats_leaderboard_next")
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="▶",
+        style=discord.ButtonStyle.secondary,
+        custom_id="stats_leaderboard_next",
+    )
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         if self.current_view < len(VIEW_PERIODS) - 1:
             self.current_view += 1
         else:
@@ -75,14 +87,16 @@ class StatsLeaderboardView(discord.ui.View):
                 if i == 0:
                     lines.append(f"🏆 **{name}** — {count} {label}")
                 else:
-                    lines.append(f"{i+1}. **{name}** — {count} {label}")
+                    lines.append(f"{i + 1}. **{name}** — {count} {label}")
 
         embed = discord.Embed(
             title=f"Staff Interaction Leaderboard — {period_name}",
             description="\n".join(lines),
-            color=discord.Color.gold()
+            color=discord.Color.gold(),
         )
-        embed.set_footer(text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}")
+        embed.set_footer(
+            text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}"
+        )
         return embed
 
     async def refresh(self, guild: discord.Guild):
@@ -96,8 +110,14 @@ class ClaimsLeaderboardView(discord.ui.View):
         self.bot = bot
         self.current_view = 0
 
-    @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary, custom_id="claims_leaderboard_prev")
-    async def prev_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="◀",
+        style=discord.ButtonStyle.secondary,
+        custom_id="claims_leaderboard_prev",
+    )
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         if self.current_view > 0:
             self.current_view -= 1
         else:
@@ -105,8 +125,14 @@ class ClaimsLeaderboardView(discord.ui.View):
         embed = await self._build_embed(interaction.guild)
         await interaction.response.edit_message(embed=embed, view=self)
 
-    @discord.ui.button(label="▶", style=discord.ButtonStyle.secondary, custom_id="claims_leaderboard_next")
-    async def next_button(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(
+        label="▶",
+        style=discord.ButtonStyle.secondary,
+        custom_id="claims_leaderboard_next",
+    )
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
         if self.current_view < len(VIEW_PERIODS) - 1:
             self.current_view += 1
         else:
@@ -149,14 +175,131 @@ class ClaimsLeaderboardView(discord.ui.View):
                 if i == 0:
                     lines.append(f"🏆 **{name}** — {count} {label}")
                 else:
-                    lines.append(f"{i+1}. **{name}** — {count} {label}")
+                    lines.append(f"{i + 1}. **{name}** — {count} {label}")
 
         embed = discord.Embed(
             title=f"Staff Claims Leaderboard — {period_name}",
             description="\n".join(lines),
-            color=discord.Color.blue()
+            color=discord.Color.blue(),
         )
-        embed.set_footer(text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}")
+        embed.set_footer(
+            text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}"
+        )
+        return embed
+
+    async def refresh(self, guild: discord.Guild):
+        embed = await self._build_embed(guild)
+        return embed
+
+
+class MessagesLeaderboardView(discord.ui.View):
+    def __init__(self, bot: "TicketBot"):
+        super().__init__(timeout=None)
+        self.bot = bot
+        self.current_view = 0
+
+    @discord.ui.button(
+        label="◀",
+        style=discord.ButtonStyle.secondary,
+        custom_id="messages_leaderboard_prev",
+    )
+    async def prev_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        if self.current_view > 0:
+            self.current_view -= 1
+        else:
+            self.current_view = len(VIEW_PERIODS) - 1
+        embed = await self._build_embed(interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(
+        label="▶",
+        style=discord.ButtonStyle.secondary,
+        custom_id="messages_leaderboard_next",
+    )
+    async def next_button(
+        self, interaction: discord.Interaction, button: discord.ui.Button
+    ):
+        if self.current_view < len(VIEW_PERIODS) - 1:
+            self.current_view += 1
+        else:
+            self.current_view = 0
+        embed = await self._build_embed(interaction.guild)
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def _build_embed(self, guild: discord.Guild) -> discord.Embed:
+        period_name, period_key = VIEW_PERIODS[self.current_view]
+        now = datetime.now(timezone.utc)
+
+        if period_key == "today":
+            since = now.strftime("%Y-%m-%d")
+        elif period_key == "week":
+            since = (now - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+        elif period_key == "month":
+            since = (now - timedelta(days=30)).strftime("%Y-%m-%d %H:%M:%S")
+        else:
+            since = None
+
+        data = await self.bot.db.get_messages_leaderboard(guild.id, since)
+
+        if not data:
+            lines = ["No messages yet."]
+        else:
+            lines = []
+            sorted_data = sorted(data.items(), key=lambda x: -x[1])
+            for i, (uid, count) in enumerate(sorted_data):
+                member = guild.get_member(uid)
+                name = member.display_name if member else f"Unknown ({uid})"
+                label = "message" if count == 1 else "messages"
+                if i == 0:
+                    lines.append(f"🏆 **{name}** — {count} {label}")
+                else:
+                    lines.append(f"{i + 1}. **{name}** — {count} {label}")
+
+        embed = discord.Embed(
+            title=f"Messages Leaderboard — {period_name}",
+            description="\n".join(lines),
+            color=discord.Color.teal(),
+        )
+        embed.set_footer(
+            text=f"Use ◀ ▶ to cycle periods  •  View {self.current_view + 1}/{len(VIEW_PERIODS)}"
+        )
+        return embed
+
+    async def refresh(self, guild: discord.Guild):
+        embed = await self._build_embed(guild)
+        return embed
+
+
+class TotalMessagesLeaderboardView(discord.ui.View):
+    def __init__(self, bot: "TicketBot"):
+        super().__init__(timeout=None)
+        self.bot = bot
+
+    async def _build_embed(self, guild: discord.Guild) -> discord.Embed:
+        data = await self.bot.db.get_messages_leaderboard(guild.id)
+
+        if not data:
+            lines = ["No messages yet."]
+        else:
+            lines = []
+            sorted_data = sorted(data.items(), key=lambda x: -x[1])
+            for i, (uid, count) in enumerate(sorted_data):
+                member = guild.get_member(uid)
+                name = member.display_name if member else f"Unknown ({uid})"
+                label = "message" if count == 1 else "messages"
+                if i == 0:
+                    lines.append(f"🏆 **{name}** — {count} {label}")
+                else:
+                    lines.append(f"{i + 1}. **{name}** — {count} {label}")
+
+        embed = discord.Embed(
+            title="Total Messages Leaderboard — All Time",
+            description="\n".join(lines),
+            color=discord.Color.fuchsia(),
+        )
+        embed.set_footer(text="Total messages sent by each user across all tickets")
         return embed
 
     async def refresh(self, guild: discord.Guild):
@@ -170,7 +313,7 @@ class CategoryPingSelect(discord.ui.Select):
         categories = bot.config_manager.get_categories()
         options = []
         for name in categories.keys():
-            match = re.match(r'^<(a?:)?(\w+):(\d+)>\s*(.*)', name)
+            match = re.match(r"^<(a?:)?(\w+):(\d+)>\s*(.*)", name)
             if match:
                 emoji_name = match.group(2)
                 emoji_id = int(match.group(3))
@@ -181,17 +324,29 @@ class CategoryPingSelect(discord.ui.Select):
                 emoji = None
             options.append(discord.SelectOption(label=label, value=name, emoji=emoji))
         if not options:
-            options.append(discord.SelectOption(label="No categories configured", value="__none__"))
-        super().__init__(placeholder="Select categories to get pinged for...", min_values=0, max_values=len(options), options=options, custom_id="category_ping_select")
+            options.append(
+                discord.SelectOption(label="No categories configured", value="__none__")
+            )
+        super().__init__(
+            placeholder="Select categories to get pinged for...",
+            min_values=0,
+            max_values=len(options),
+            options=options,
+            custom_id="category_ping_select",
+        )
 
     async def callback(self, interaction: discord.Interaction):
         if "__none__" in (self.values or []):
-            await interaction.response.send_message("No ping categories are configured.", ephemeral=True)
+            await interaction.response.send_message(
+                "No ping categories are configured.", ephemeral=True
+            )
             return
 
         member = interaction.user
         if not isinstance(member, discord.Member):
-            await interaction.response.send_message("This can only be used in a server.", ephemeral=True)
+            await interaction.response.send_message(
+                "This can only be used in a server.", ephemeral=True
+            )
             return
 
         guild = interaction.guild
@@ -217,7 +372,9 @@ class CategoryPingSelect(discord.ui.Select):
             if to_add:
                 await member.add_roles(*to_add, reason="Updated ping preferences")
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have permission to manage these roles.", ephemeral=True)
+            await interaction.response.send_message(
+                "I don't have permission to manage these roles.", ephemeral=True
+            )
             return
 
         added_str = ", ".join(r.mention for r in to_add) if to_add else ""
@@ -247,6 +404,8 @@ class StatsCog(commands.Cog):
     async def on_ready(self):
         self.bot.add_view(StatsLeaderboardView(self.bot))
         self.bot.add_view(ClaimsLeaderboardView(self.bot))
+        self.bot.add_view(MessagesLeaderboardView(self.bot))
+        self.bot.add_view(TotalMessagesLeaderboardView(self.bot))
         self.bot.add_view(CategoryPingView(self.bot))
 
     async def _build_stats_embed(self, guild: discord.Guild) -> discord.Embed:
@@ -270,18 +429,32 @@ class StatsCog(commands.Cog):
                 channel = guild.get_channel(ticket["channel_id"])
                 creator = guild.get_member(ticket["creator_id"])
                 chan_str = channel.mention if channel else f"#{ticket['channel_id']}"
-                creator_str = creator.mention if creator else f"<@{ticket['creator_id']}>"
+                creator_str = (
+                    creator.mention if creator else f"<@{ticket['creator_id']}>"
+                )
                 lines.append(f"• {chan_str} ({ticket['category']}) by {creator_str}")
             if len(unclaimed) > 10:
                 lines.append(f"*...and {len(unclaimed) - 10} more*")
 
-        return discord.Embed(title="Ticket Stats", description="\n".join(lines), color=discord.Color.purple())
+        return discord.Embed(
+            title="Ticket Stats",
+            description="\n".join(lines),
+            color=discord.Color.purple(),
+        )
 
     async def update_stats(self, guild: discord.Guild):
         channel_id = self.bot.config_manager.get_stats_channel()
         message_id = self.bot.config_manager.get_stats_message()
         lb_message_id = self.bot.config_manager.get_stats_leaderboard_message()
-        claims_lb_message_id = self.bot.config_manager.get_stats_claims_leaderboard_message()
+        claims_lb_message_id = (
+            self.bot.config_manager.get_stats_claims_leaderboard_message()
+        )
+        messages_lb_message_id = (
+            self.bot.config_manager.get_stats_messages_leaderboard_message()
+        )
+        total_msgs_lb_message_id = (
+            self.bot.config_manager.get_stats_total_messages_leaderboard_message()
+        )
 
         if not channel_id:
             return
@@ -321,6 +494,30 @@ class StatsCog(commands.Cog):
                 embed = await view.refresh(guild)
                 await claims_lb_msg.edit(embed=embed, view=view)
 
+        # Update messages leaderboard message
+        if messages_lb_message_id:
+            try:
+                msgs_lb_msg = await channel.fetch_message(messages_lb_message_id)
+            except discord.NotFound:
+                pass
+            else:
+                view = MessagesLeaderboardView(self.bot)
+                embed = await view.refresh(guild)
+                await msgs_lb_msg.edit(embed=embed, view=view)
+
+        # Update total messages leaderboard message
+        if total_msgs_lb_message_id:
+            try:
+                total_msgs_lb_msg = await channel.fetch_message(
+                    total_msgs_lb_message_id
+                )
+            except discord.NotFound:
+                pass
+            else:
+                view = TotalMessagesLeaderboardView(self.bot)
+                embed = await view.refresh(guild)
+                await total_msgs_lb_msg.edit(embed=embed, view=view)
+
         # Update dashboard message
         dashboard_channel_id = self.bot.config_manager.get_dashboard_channel()
         dashboard_message_id = self.bot.config_manager.get_dashboard_message()
@@ -347,7 +544,9 @@ class StatsCog(commands.Cog):
                     pass
                 else:
                     open_count = await self.bot.db.get_open_tickets_count(guild.id)
-                    max_tickets = self.bot.config_manager.get_ticket_utilization_max_tickets()
+                    max_tickets = (
+                        self.bot.config_manager.get_ticket_utilization_max_tickets()
+                    )
                     embed = self._build_utilization_embed(open_count, max_tickets)
                     await util_msg.edit(embed=embed)
 
@@ -386,21 +585,16 @@ class StatsCog(commands.Cog):
         else:
             date_str = now.strftime("%B %d, %Y")
 
-        embed = discord.Embed(
-            title="📊 Ticket Support Utilization",
-            color=embed_color
-        )
+        embed = discord.Embed(title="📊 Ticket Support Utilization", color=embed_color)
         embed.add_field(
             name=f"{indicator} Utilization",
             value=f"```\n[{bar}] {pct:.1f}%\n```\n**{open_count}** / {max_tickets} Tickets",
-            inline=False
+            inline=False,
         )
-        embed.add_field(
-            name="📝 Status",
-            value=status,
-            inline=False
+        embed.add_field(name="📝 Status", value=status, inline=False)
+        embed.set_footer(
+            text=f"Updates automatically · Last Update {date_str} at {now.strftime('%H:%M:%S')}"
         )
-        embed.set_footer(text=f"Updates automatically · Last Update {date_str} at {now.strftime('%H:%M:%S')}")
         return embed
 
     async def get_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
@@ -409,6 +603,18 @@ class StatsCog(commands.Cog):
 
     async def get_claims_leaderboard_embed(self, guild: discord.Guild) -> discord.Embed:
         view = ClaimsLeaderboardView(self.bot)
+        return await view.refresh(guild)
+
+    async def get_messages_leaderboard_embed(
+        self, guild: discord.Guild
+    ) -> discord.Embed:
+        view = MessagesLeaderboardView(self.bot)
+        return await view.refresh(guild)
+
+    async def get_total_messages_leaderboard_embed(
+        self, guild: discord.Guild
+    ) -> discord.Embed:
+        view = TotalMessagesLeaderboardView(self.bot)
         return await view.refresh(guild)
 
 

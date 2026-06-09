@@ -17,6 +17,7 @@ def _has_setup_access():
         if interaction.user.get_role(SETUP_BYPASS_ROLE):
             return True
         raise app_commands.MissingPermissions(["Administrator"])
+
     return app_commands.check(predicate)
 
 
@@ -24,64 +25,98 @@ class SetupCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
 
-    setup_group = app_commands.Group(name="setup", description="Bot configuration commands")
+    setup_group = app_commands.Group(
+        name="setup", description="Bot configuration commands"
+    )
 
     @setup_group.command(name="category", description="Add or edit a ticket category")
     @app_commands.describe(
         name="Category name",
         discord_category="Discord category channel",
-        role_name="Role name to create/use"
+        role_name="Role name to create/use",
     )
     @_has_setup_access()
-    async def setup_category(self, interaction: discord.Interaction, name: str, discord_category: discord.CategoryChannel, role_name: Optional[str] = None):
+    async def setup_category(
+        self,
+        interaction: discord.Interaction,
+        name: str,
+        discord_category: discord.CategoryChannel,
+        role_name: Optional[str] = None,
+    ):
         if not role_name:
             role_name = f"{name}-ticket"
         self.bot.config_manager.set_category(name, discord_category.id, role_name)
-        await interaction.response.send_message(f"Category '{name}' configured with role '{role_name}'.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Category '{name}' configured with role '{role_name}'.", ephemeral=True
+        )
 
-    async def _category_autocomplete(self, interaction: discord.Interaction, current: str):
+    async def _category_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ):
         categories = self.bot.config_manager.get_categories()
         return [
             app_commands.Choice(name=name, value=name)
-            for name in categories if current.lower() in name.lower()
+            for name in categories
+            if current.lower() in name.lower()
         ][:25]
 
     @setup_group.command(name="questions", description="Set questions for a category")
-    @app_commands.describe(category="Category name", questions="Comma-separated list of questions")
+    @app_commands.describe(
+        category="Category name", questions="Comma-separated list of questions"
+    )
     @app_commands.autocomplete(category=_category_autocomplete)
     @_has_setup_access()
-    async def setup_questions(self, interaction: discord.Interaction, category: str, questions: str):
+    async def setup_questions(
+        self, interaction: discord.Interaction, category: str, questions: str
+    ):
         q_list = [q.strip() for q in questions.split(",") if q.strip()]
         try:
             self.bot.config_manager.set_questions(category, q_list)
-            await interaction.response.send_message(f"Questions set for '{category}'.", ephemeral=True)
+            await interaction.response.send_message(
+                f"Questions set for '{category}'.", ephemeral=True
+            )
         except ValueError as e:
             await interaction.response.send_message(str(e), ephemeral=True)
 
     @setup_group.command(name="panel", description="Send the ticket creation panel")
     @_has_setup_access()
-    async def setup_panel(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def setup_panel(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
         from cogs.tickets import CreateTicketButton
+
         title = self.bot.config_manager.get_panel_title()
         description = self.bot.config_manager.get_panel_description()
         embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.purple()
+            title=title, description=description, color=discord.Color.purple()
         )
         await channel.send(embed=embed, view=CreateTicketButton())
-        await interaction.response.send_message(f"Panel sent to {channel.mention}.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Panel sent to {channel.mention}.", ephemeral=True
+        )
 
     @setup_group.command(name="stats", description="Set the stats channel")
     @_has_setup_access()
-    async def setup_stats(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def setup_stats(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
         # Main stats message
-        embed1 = discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
+        embed1 = discord.Embed(
+            title="Ticket Stats",
+            description="Open Tickets: 0\nStaff Loads:\nNone",
+            color=discord.Color.purple(),
+        )
         msg1 = await channel.send(embed=embed1)
         await msg1.pin()
 
         # Leaderboard message
-        from cogs.stats import StatsLeaderboardView, ClaimsLeaderboardView
+        from cogs.stats import (
+            StatsLeaderboardView,
+            ClaimsLeaderboardView,
+            MessagesLeaderboardView,
+            TotalMessagesLeaderboardView,
+        )
+
         lb_view = StatsLeaderboardView(self.bot)
         embed2 = await lb_view.refresh(interaction.guild)
         msg2 = await channel.send(embed=embed2, view=lb_view)
@@ -93,63 +128,128 @@ class SetupCog(commands.Cog):
         msg3 = await channel.send(embed=embed3, view=claims_lb_view)
         await msg3.pin()
 
-        self.bot.config_manager.set_stats_channel(channel.id, msg1.id, msg2.id, msg3.id)
-        await interaction.response.send_message(f"Stats set up in {channel.mention}.", ephemeral=True)
+        # Messages leaderboard message
+        msgs_lb_view = MessagesLeaderboardView(self.bot)
+        embed4 = await msgs_lb_view.refresh(interaction.guild)
+        msg4 = await channel.send(embed=embed4, view=msgs_lb_view)
+        await msg4.pin()
 
-    @setup_group.command(name="archive", description="Set the channel for archiving ticket attachments")
+        # Total messages leaderboard message
+        total_msgs_view = TotalMessagesLeaderboardView(self.bot)
+        embed5 = await total_msgs_view.refresh(interaction.guild)
+        msg5 = await channel.send(embed=embed5, view=total_msgs_view)
+        await msg5.pin()
+
+        self.bot.config_manager.set_stats_channel(
+            channel.id, msg1.id, msg2.id, msg3.id, msg4.id, msg5.id
+        )
+        await interaction.response.send_message(
+            f"Stats set up in {channel.mention}.", ephemeral=True
+        )
+
+    @setup_group.command(
+        name="archive", description="Set the channel for archiving ticket attachments"
+    )
     @_has_setup_access()
-    async def setup_archive(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def setup_archive(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
         self.bot.config_manager.set_archive_channel(channel.id)
         await interaction.response.send_message(
             f"Archive channel set to {channel.mention}. Ticket attachments will be saved here before channel deletion.",
             ephemeral=True,
         )
 
-    @setup_group.command(name="staffrole", description="Set the role used for leaderboard tracking (shows staff even with 0 tickets)")
+    @setup_group.command(
+        name="staffrole",
+        description="Set the role used for leaderboard tracking (shows staff even with 0 tickets)",
+    )
     @_has_setup_access()
-    async def setup_staff_role(self, interaction: discord.Interaction, role: discord.Role):
+    async def setup_staff_role(
+        self, interaction: discord.Interaction, role: discord.Role
+    ):
         self.bot.config_manager.set_staff_role(role.id)
-        await interaction.response.send_message(f"Staff role set to {role.mention}. Leaderboards will include all members with this role.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Staff role set to {role.mention}. Leaderboards will include all members with this role.",
+            ephemeral=True,
+        )
 
-    @setup_group.command(name="dashboard", description="Set the ticket dashboard channel (stats + ping role selector)")
+    @setup_group.command(
+        name="dashboard",
+        description="Set the ticket dashboard channel (stats + ping role selector)",
+    )
     @_has_setup_access()
-    async def setup_dashboard(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def setup_dashboard(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
         from cogs.stats import CategoryPingView
+
         try:
             stats_cog = self.bot.get_cog("StatsCog")
-            embed = await stats_cog._build_stats_embed(interaction.guild) if stats_cog else discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
+            embed = (
+                await stats_cog._build_stats_embed(interaction.guild)
+                if stats_cog
+                else discord.Embed(
+                    title="Ticket Stats",
+                    description="Open Tickets: 0\nStaff Loads:\nNone",
+                    color=discord.Color.purple(),
+                )
+            )
         except Exception:
-            embed = discord.Embed(title="Ticket Stats", description="Open Tickets: 0\nStaff Loads:\nNone", color=discord.Color.purple())
+            embed = discord.Embed(
+                title="Ticket Stats",
+                description="Open Tickets: 0\nStaff Loads:\nNone",
+                color=discord.Color.purple(),
+            )
         view = CategoryPingView(self.bot)
         msg = await channel.send(embed=embed, view=view)
         self.bot.config_manager.set_dashboard(channel.id, msg.id)
-        await interaction.response.send_message(f"Dashboard set up in {channel.mention}.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Dashboard set up in {channel.mention}.", ephemeral=True
+        )
 
-    @setup_group.command(name="transcript", description="Set the channel where ticket summaries are posted after deletion")
+    @setup_group.command(
+        name="transcript",
+        description="Set the channel where ticket summaries are posted after deletion",
+    )
     @_has_setup_access()
-    async def setup_transcript(self, interaction: discord.Interaction, channel: discord.TextChannel):
+    async def setup_transcript(
+        self, interaction: discord.Interaction, channel: discord.TextChannel
+    ):
         self.bot.config_manager.set_transcript_channel(channel.id)
         await interaction.response.send_message(
             f"Transcript log channel set to {channel.mention}. Ticket summaries will be posted here after deletion.",
             ephemeral=True,
         )
 
-    @setup_group.command(name="ticket-utilization", description="Set up a live ticket utilization status panel")
+    @setup_group.command(
+        name="ticket-utilization",
+        description="Set up a live ticket utilization status panel",
+    )
     @app_commands.describe(
         channel="Channel to send the utilization panel",
-        max_tickets="Maximum tickets before 100% utilization"
+        max_tickets="Maximum tickets before 100% utilization",
     )
     @_has_setup_access()
-    async def setup_ticket_utilization(self, interaction: discord.Interaction, channel: discord.TextChannel, max_tickets: int):
+    async def setup_ticket_utilization(
+        self,
+        interaction: discord.Interaction,
+        channel: discord.TextChannel,
+        max_tickets: int,
+    ):
         if max_tickets < 1:
-            await interaction.response.send_message("Max tickets must be at least 1.", ephemeral=True)
+            await interaction.response.send_message(
+                "Max tickets must be at least 1.", ephemeral=True
+            )
             return
 
         open_count = await self.bot.db.get_open_tickets_count(interaction.guild_id)
         embed = self._build_utilization_embed(open_count, max_tickets)
         msg = await channel.send(embed=embed)
         self.bot.config_manager.set_ticket_utilization(channel.id, msg.id, max_tickets)
-        await interaction.response.send_message(f"Ticket utilization panel set up in {channel.mention}.", ephemeral=True)
+        await interaction.response.send_message(
+            f"Ticket utilization panel set up in {channel.mention}.", ephemeral=True
+        )
 
     @staticmethod
     def _build_utilization_embed(open_count: int, max_tickets: int) -> discord.Embed:
@@ -186,26 +286,22 @@ class SetupCog(commands.Cog):
         else:
             date_str = now.strftime("%B %d, %Y")
 
-        embed = discord.Embed(
-            title="📊 Ticket Support Utilization",
-            color=embed_color
-        )
+        embed = discord.Embed(title="📊 Ticket Support Utilization", color=embed_color)
         embed.add_field(
             name=f"{indicator} Utilization",
             value=f"```\n[{bar}] {pct:.1f}%\n```\n**{open_count}** / {max_tickets} Tickets",
-            inline=False
+            inline=False,
         )
-        embed.add_field(
-            name="📝 Status",
-            value=status,
-            inline=False
+        embed.add_field(name="📝 Status", value=status, inline=False)
+        embed.set_footer(
+            text=f"Updates automatically · Last Update {date_str} at {now.strftime('%H:%M:%S')}"
         )
-        embed.set_footer(text=f"Updates automatically · Last Update {date_str} at {now.strftime('%H:%M:%S')}")
         return embed
 
     @commands.command(name="ping")
     async def ping(self, ctx: commands.Context):
         await ctx.send("Pong!")
+
 
 async def setup(bot: "TicketBot"):
     await bot.add_cog(SetupCog(bot))

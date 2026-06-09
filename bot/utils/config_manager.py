@@ -12,6 +12,8 @@ DEFAULT_CONFIG = {
     "stats_message_id": None,
     "stats_leaderboard_message_id": None,
     "stats_claims_leaderboard_message_id": None,
+    "stats_messages_leaderboard_message_id": None,
+    "stats_total_messages_leaderboard_message_id": None,
     "archive_channel_id": None,
     "staff_role_id": None,
     "dashboard_channel_id": None,
@@ -19,7 +21,7 @@ DEFAULT_CONFIG = {
     "transcript_channel_id": None,
     "ticket_utilization_channel_id": None,
     "ticket_utilization_message_id": None,
-    "ticket_utilization_max_tickets": 40
+    "ticket_utilization_max_tickets": 40,
 }
 
 
@@ -62,14 +64,20 @@ class ConfigManager:
     def get_categories(self) -> Dict[str, Any]:
         return self.config.get("categories", {})
 
-    def set_category(self, name: str, discord_category_id: int, role_name: str, questions: Optional[List[str]] = None):
+    def set_category(
+        self,
+        name: str,
+        discord_category_id: int,
+        role_name: str,
+        questions: Optional[List[str]] = None,
+    ):
         cfg = self.config
         if "categories" not in cfg:
             cfg["categories"] = {}
         cfg["categories"][name] = {
             "discord_category_id": discord_category_id,
             "role_name": role_name,
-            "questions": questions or []
+            "questions": questions or [],
         }
         self._save(cfg)
         self._config = cfg
@@ -82,12 +90,24 @@ class ConfigManager:
         self._save(cfg)
         self._config = cfg
 
-    def set_stats_channel(self, channel_id: int, message_id: int, leaderboard_message_id: int = None, claims_leaderboard_message_id: int = None):
+    def set_stats_channel(
+        self,
+        channel_id: int,
+        message_id: int,
+        leaderboard_message_id: int = None,
+        claims_leaderboard_message_id: int = None,
+        messages_leaderboard_message_id: int = None,
+        total_messages_leaderboard_message_id: int = None,
+    ):
         cfg = self.config
         cfg["stats_channel_id"] = channel_id
         cfg["stats_message_id"] = message_id
         cfg["stats_leaderboard_message_id"] = leaderboard_message_id
         cfg["stats_claims_leaderboard_message_id"] = claims_leaderboard_message_id
+        cfg["stats_messages_leaderboard_message_id"] = messages_leaderboard_message_id
+        cfg["stats_total_messages_leaderboard_message_id"] = (
+            total_messages_leaderboard_message_id
+        )
         self._save(cfg)
         self._config = cfg
 
@@ -102,6 +122,12 @@ class ConfigManager:
 
     def get_stats_claims_leaderboard_message(self) -> Optional[int]:
         return self.config.get("stats_claims_leaderboard_message_id")
+
+    def get_stats_messages_leaderboard_message(self) -> Optional[int]:
+        return self.config.get("stats_messages_leaderboard_message_id")
+
+    def get_stats_total_messages_leaderboard_message(self) -> Optional[int]:
+        return self.config.get("stats_total_messages_leaderboard_message_id")
 
     def get_archive_channel(self) -> Optional[int]:
         return self.config.get("archive_channel_id")
@@ -132,7 +158,9 @@ class ConfigManager:
         return self.config.get("panel_title", "Support Tickets")
 
     def get_panel_description(self) -> str:
-        desc = self.config.get("panel_description", ["Click the button below to create a ticket."])
+        desc = self.config.get(
+            "panel_description", ["Click the button below to create a ticket."]
+        )
         if isinstance(desc, list):
             return "\n".join(desc)
         return desc
@@ -175,7 +203,9 @@ class ConfigManager:
     def get_ticket_utilization_max_tickets(self) -> int:
         return self.config.get("ticket_utilization_max_tickets", 40)
 
-    def set_ticket_utilization(self, channel_id: int, message_id: int, max_tickets: int):
+    def set_ticket_utilization(
+        self, channel_id: int, message_id: int, max_tickets: int
+    ):
         cfg = self.config
         cfg["ticket_utilization_channel_id"] = channel_id
         cfg["ticket_utilization_message_id"] = message_id

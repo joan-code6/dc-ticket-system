@@ -14,7 +14,9 @@ class Database:
     @property
     def conn(self) -> aiosqlite.Connection:
         if self._connection is None:
-            raise RuntimeError("Database connection is not established. Call connect() first.")
+            raise RuntimeError(
+                "Database connection is not established. Call connect() first."
+            )
         return self._connection
 
     async def connect(self):
@@ -70,15 +72,19 @@ class Database:
         )
         await self.conn.commit()
         try:
-            await self.conn.execute("ALTER TABLE tickets ADD COLUMN last_reminder_at TEXT")
+            await self.conn.execute(
+                "ALTER TABLE tickets ADD COLUMN last_reminder_at TEXT"
+            )
             await self.conn.commit()
         except Exception:
             pass
 
-    async def create_ticket(self, guild_id: int, channel_id: int, creator_id: int, category: str) -> int:
+    async def create_ticket(
+        self, guild_id: int, channel_id: int, creator_id: int, category: str
+    ) -> int:
         cursor = await self.conn.execute(
             "INSERT INTO tickets (guild_id, channel_id, creator_id, category) VALUES (?, ?, ?, ?)",
-            (guild_id, channel_id, creator_id, category)
+            (guild_id, channel_id, creator_id, category),
         )
         await self.conn.commit()
         return cursor.lastrowid or 0
@@ -92,10 +98,12 @@ class Database:
                 return dict(row)
             return None
 
-    async def get_open_ticket_by_user(self, creator_id: int, guild_id: int) -> Optional[Dict[str, Any]]:
+    async def get_open_ticket_by_user(
+        self, creator_id: int, guild_id: int
+    ) -> Optional[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM tickets WHERE creator_id = ? AND guild_id = ? AND status = 'open'",
-            (creator_id, guild_id)
+            (creator_id, guild_id),
         ) as cursor:
             row = await cursor.fetchone()
             if row:
@@ -114,45 +122,63 @@ class Database:
     async def update_ticket_assigned(self, ticket_id: int, assigned_ids: List[int]):
         await self.conn.execute(
             "UPDATE tickets SET assigned_ids = ? WHERE id = ?",
-            (json.dumps(assigned_ids), ticket_id)
+            (json.dumps(assigned_ids), ticket_id),
         )
         await self.conn.commit()
 
     async def close_ticket(self, ticket_id: int, reason: Optional[str] = None):
         await self.conn.execute(
             "UPDATE tickets SET status = 'closed', closed_at = ?, close_reason = ? WHERE id = ?",
-            (datetime.now(timezone.utc).isoformat(), reason, ticket_id)
+            (datetime.now(timezone.utc).isoformat(), reason, ticket_id),
         )
         await self.conn.commit()
 
     async def reopen_ticket(self, ticket_id: int):
         await self.conn.execute(
             "UPDATE tickets SET status = 'open', closed_at = NULL, close_reason = NULL WHERE id = ?",
-            (ticket_id,)
+            (ticket_id,),
         )
         await self.conn.commit()
 
-    async def add_transcript_message(self, ticket_id: int, message_id: int, author_id: int,
-                                     author_name: str, content: str, timestamp: datetime,
-                                     attachments: List[str]):
+    async def add_transcript_message(
+        self,
+        ticket_id: int,
+        message_id: int,
+        author_id: int,
+        author_name: str,
+        content: str,
+        timestamp: datetime,
+        attachments: List[str],
+    ):
         await self.conn.execute(
             "INSERT OR IGNORE INTO transcript_messages (ticket_id, message_id, author_id, author_name, content, timestamp, attachments_json) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (ticket_id, message_id, author_id, author_name, content, timestamp.isoformat(), json.dumps(attachments))
+            (
+                ticket_id,
+                message_id,
+                author_id,
+                author_name,
+                content,
+                timestamp.isoformat(),
+                json.dumps(attachments),
+            ),
         )
         await self.conn.commit()
 
-    async def update_transcript_message_content(self, ticket_id: int, message_id: int,
-                                                content: str, attachments: List[str]):
+    async def update_transcript_message_content(
+        self, ticket_id: int, message_id: int, content: str, attachments: List[str]
+    ):
         await self.conn.execute(
             "UPDATE transcript_messages SET content = ?, attachments_json = ? WHERE ticket_id = ? AND message_id = ?",
-            (content, json.dumps(attachments), ticket_id, message_id)
+            (content, json.dumps(attachments), ticket_id, message_id),
         )
         await self.conn.commit()
 
-    async def update_transcript_attachment_urls(self, ticket_id: int, url_map: Dict[str, str]):
+    async def update_transcript_attachment_urls(
+        self, ticket_id: int, url_map: Dict[str, str]
+    ):
         async with self.conn.execute(
             "SELECT id, attachments_json FROM transcript_messages WHERE ticket_id = ?",
-            (ticket_id,)
+            (ticket_id,),
         ) as cursor:
             rows = await cursor.fetchall()
 
@@ -162,7 +188,7 @@ class Database:
             if updated != attachments:
                 await self.conn.execute(
                     "UPDATE transcript_messages SET attachments_json = ? WHERE id = ?",
-                    (json.dumps(updated), row["id"])
+                    (json.dumps(updated), row["id"]),
                 )
 
         await self.conn.commit()
@@ -170,7 +196,7 @@ class Database:
     async def get_user_message_counts(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT author_id, author_name, COUNT(*) as count FROM transcript_messages WHERE ticket_id = ? GROUP BY author_id ORDER BY count DESC",
-            (ticket_id,)
+            (ticket_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -178,7 +204,7 @@ class Database:
     async def get_ticket_closer(self, ticket_id: int) -> int | None:
         async with self.conn.execute(
             "SELECT user_id FROM ticket_logs WHERE ticket_id = ? AND action = 'close' ORDER BY timestamp DESC LIMIT 1",
-            (ticket_id,)
+            (ticket_id,),
         ) as cursor:
             row = await cursor.fetchone()
             return row["user_id"] if row else None
@@ -186,22 +212,28 @@ class Database:
     async def get_transcript_messages(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM transcript_messages WHERE ticket_id = ? ORDER BY timestamp ASC",
-            (ticket_id,)
+            (ticket_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def add_ticket_log(self, ticket_id: int, action: str, user_id: int, details: Optional[Dict[str, Any]] = None):
+    async def add_ticket_log(
+        self,
+        ticket_id: int,
+        action: str,
+        user_id: int,
+        details: Optional[Dict[str, Any]] = None,
+    ):
         await self.conn.execute(
             "INSERT INTO ticket_logs (ticket_id, action, user_id, details_json) VALUES (?, ?, ?, ?)",
-            (ticket_id, action, user_id, json.dumps(details or {}))
+            (ticket_id, action, user_id, json.dumps(details or {})),
         )
         await self.conn.commit()
 
     async def get_ticket_logs(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM ticket_logs WHERE ticket_id = ? ORDER BY timestamp ASC",
-            (ticket_id,)
+            (ticket_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -209,7 +241,7 @@ class Database:
     async def get_open_tickets_count(self, guild_id: int) -> int:
         async with self.conn.execute(
             "SELECT COUNT(*) as count FROM tickets WHERE guild_id = ? AND status = 'open'",
-            (guild_id,)
+            (guild_id,),
         ) as cursor:
             row = await cursor.fetchone()
             return row["count"] if row else 0
@@ -217,7 +249,7 @@ class Database:
     async def get_staff_loads(self, guild_id: int) -> Dict[int, int]:
         async with self.conn.execute(
             "SELECT assigned_ids FROM tickets WHERE guild_id = ? AND status = 'open'",
-            (guild_id,)
+            (guild_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             loads = {}
@@ -230,7 +262,7 @@ class Database:
     async def get_unclaimed_tickets(self, guild_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT id, channel_id, creator_id, category FROM tickets WHERE guild_id = ? AND status = 'open' AND assigned_ids = '[]' ORDER BY created_at ASC",
-            (guild_id,)
+            (guild_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -258,7 +290,9 @@ class Database:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
-    async def get_interaction_leaderboard(self, guild_id: int, since: str = None) -> Dict[int, int]:
+    async def get_interaction_leaderboard(
+        self, guild_id: int, since: str = None
+    ) -> Dict[int, int]:
         """Count distinct tickets each staff member interacted with since a given timestamp."""
         if since:
             query = """
@@ -284,7 +318,9 @@ class Database:
             rows = await cursor.fetchall()
             return {row["user_id"]: row["count"] for row in rows}
 
-    async def get_claims_leaderboard(self, guild_id: int, since: str = None) -> Dict[int, int]:
+    async def get_claims_leaderboard(
+        self, guild_id: int, since: str = None
+    ) -> Dict[int, int]:
         """Count distinct tickets each staff member claimed since a given timestamp."""
         if since:
             query = """
@@ -310,10 +346,37 @@ class Database:
             rows = await cursor.fetchall()
             return {row["user_id"]: row["count"] for row in rows}
 
+    async def get_messages_leaderboard(
+        self, guild_id: int, since: str = None
+    ) -> Dict[int, int]:
+        if since:
+            query = """
+                SELECT tm.author_id AS user_id, COUNT(*) AS count
+                FROM transcript_messages tm
+                JOIN tickets t ON tm.ticket_id = t.id
+                WHERE t.guild_id = ? AND tm.timestamp >= ?
+                GROUP BY tm.author_id
+                ORDER BY count DESC
+            """
+            params = (guild_id, since)
+        else:
+            query = """
+                SELECT tm.author_id AS user_id, COUNT(*) AS count
+                FROM transcript_messages tm
+                JOIN tickets t ON tm.ticket_id = t.id
+                WHERE t.guild_id = ?
+                GROUP BY tm.author_id
+                ORDER BY count DESC
+            """
+            params = (guild_id,)
+        async with self.conn.execute(query, params) as cursor:
+            rows = await cursor.fetchall()
+            return {row["user_id"]: row["count"] for row in rows}
+
     async def get_assigned_open_tickets(self, guild_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM tickets WHERE guild_id = ? AND status = 'open' AND assigned_ids != '[]'",
-            (guild_id,)
+            (guild_id,),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
@@ -321,6 +384,6 @@ class Database:
     async def update_ticket_reminder(self, ticket_id: int, timestamp: str):
         await self.conn.execute(
             "UPDATE tickets SET last_reminder_at = ? WHERE id = ?",
-            (timestamp, ticket_id)
+            (timestamp, ticket_id),
         )
         await self.conn.commit()
