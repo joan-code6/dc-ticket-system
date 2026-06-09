@@ -13,7 +13,6 @@ DEFAULT_CONFIG = {
     "stats_leaderboard_message_id": None,
     "stats_claims_leaderboard_message_id": None,
     "stats_messages_leaderboard_message_id": None,
-    "stats_total_messages_leaderboard_message_id": None,
     "archive_channel_id": None,
     "staff_role_id": None,
     "dashboard_channel_id": None,
@@ -97,7 +96,6 @@ class ConfigManager:
         leaderboard_message_id: int = None,
         claims_leaderboard_message_id: int = None,
         messages_leaderboard_message_id: int = None,
-        total_messages_leaderboard_message_id: int = None,
     ):
         cfg = self.config
         cfg["stats_channel_id"] = channel_id
@@ -105,9 +103,6 @@ class ConfigManager:
         cfg["stats_leaderboard_message_id"] = leaderboard_message_id
         cfg["stats_claims_leaderboard_message_id"] = claims_leaderboard_message_id
         cfg["stats_messages_leaderboard_message_id"] = messages_leaderboard_message_id
-        cfg["stats_total_messages_leaderboard_message_id"] = (
-            total_messages_leaderboard_message_id
-        )
         self._save(cfg)
         self._config = cfg
 
@@ -125,9 +120,6 @@ class ConfigManager:
 
     def get_stats_messages_leaderboard_message(self) -> Optional[int]:
         return self.config.get("stats_messages_leaderboard_message_id")
-
-    def get_stats_total_messages_leaderboard_message(self) -> Optional[int]:
-        return self.config.get("stats_total_messages_leaderboard_message_id")
 
     def get_archive_channel(self) -> Optional[int]:
         return self.config.get("archive_channel_id")

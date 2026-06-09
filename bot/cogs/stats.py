@@ -272,41 +272,6 @@ class MessagesLeaderboardView(discord.ui.View):
         return embed
 
 
-class TotalMessagesLeaderboardView(discord.ui.View):
-    def __init__(self, bot: "TicketBot"):
-        super().__init__(timeout=None)
-        self.bot = bot
-
-    async def _build_embed(self, guild: discord.Guild) -> discord.Embed:
-        data = await self.bot.db.get_messages_leaderboard(guild.id)
-
-        if not data:
-            lines = ["No messages yet."]
-        else:
-            lines = []
-            sorted_data = sorted(data.items(), key=lambda x: -x[1])
-            for i, (uid, count) in enumerate(sorted_data):
-                member = guild.get_member(uid)
-                name = member.display_name if member else f"Unknown ({uid})"
-                label = "message" if count == 1 else "messages"
-                if i == 0:
-                    lines.append(f"🏆 **{name}** — {count} {label}")
-                else:
-                    lines.append(f"{i + 1}. **{name}** — {count} {label}")
-
-        embed = discord.Embed(
-            title="Total Messages Leaderboard — All Time",
-            description="\n".join(lines),
-            color=discord.Color.fuchsia(),
-        )
-        embed.set_footer(text="Total messages sent by each user across all tickets")
-        return embed
-
-    async def refresh(self, guild: discord.Guild):
-        embed = await self._build_embed(guild)
-        return embed
-
-
 class CategoryPingSelect(discord.ui.Select):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
@@ -405,7 +370,6 @@ class StatsCog(commands.Cog):
         self.bot.add_view(StatsLeaderboardView(self.bot))
         self.bot.add_view(ClaimsLeaderboardView(self.bot))
         self.bot.add_view(MessagesLeaderboardView(self.bot))
-        self.bot.add_view(TotalMessagesLeaderboardView(self.bot))
         self.bot.add_view(CategoryPingView(self.bot))
 
     async def _build_stats_embed(self, guild: discord.Guild) -> discord.Embed:
@@ -451,9 +415,6 @@ class StatsCog(commands.Cog):
         )
         messages_lb_message_id = (
             self.bot.config_manager.get_stats_messages_leaderboard_message()
-        )
-        total_msgs_lb_message_id = (
-            self.bot.config_manager.get_stats_total_messages_leaderboard_message()
         )
 
         if not channel_id:
@@ -504,19 +465,6 @@ class StatsCog(commands.Cog):
                 view = MessagesLeaderboardView(self.bot)
                 embed = await view.refresh(guild)
                 await msgs_lb_msg.edit(embed=embed, view=view)
-
-        # Update total messages leaderboard message
-        if total_msgs_lb_message_id:
-            try:
-                total_msgs_lb_msg = await channel.fetch_message(
-                    total_msgs_lb_message_id
-                )
-            except discord.NotFound:
-                pass
-            else:
-                view = TotalMessagesLeaderboardView(self.bot)
-                embed = await view.refresh(guild)
-                await total_msgs_lb_msg.edit(embed=embed, view=view)
 
         # Update dashboard message
         dashboard_channel_id = self.bot.config_manager.get_dashboard_channel()
@@ -609,12 +557,6 @@ class StatsCog(commands.Cog):
         self, guild: discord.Guild
     ) -> discord.Embed:
         view = MessagesLeaderboardView(self.bot)
-        return await view.refresh(guild)
-
-    async def get_total_messages_leaderboard_embed(
-        self, guild: discord.Guild
-    ) -> discord.Embed:
-        view = TotalMessagesLeaderboardView(self.bot)
         return await view.refresh(guild)
 
 

@@ -114,7 +114,6 @@ class SetupCog(commands.Cog):
             StatsLeaderboardView,
             ClaimsLeaderboardView,
             MessagesLeaderboardView,
-            TotalMessagesLeaderboardView,
         )
 
         lb_view = StatsLeaderboardView(self.bot)
@@ -134,14 +133,8 @@ class SetupCog(commands.Cog):
         msg4 = await channel.send(embed=embed4, view=msgs_lb_view)
         await msg4.pin()
 
-        # Total messages leaderboard message
-        total_msgs_view = TotalMessagesLeaderboardView(self.bot)
-        embed5 = await total_msgs_view.refresh(interaction.guild)
-        msg5 = await channel.send(embed=embed5, view=total_msgs_view)
-        await msg5.pin()
-
         self.bot.config_manager.set_stats_channel(
-            channel.id, msg1.id, msg2.id, msg3.id, msg4.id, msg5.id
+            channel.id, msg1.id, msg2.id, msg3.id, msg4.id
         )
         await interaction.response.send_message(
             f"Stats set up in {channel.mention}.", ephemeral=True
