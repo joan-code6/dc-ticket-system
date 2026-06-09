@@ -243,6 +243,14 @@ class MessagesLeaderboardView(discord.ui.View):
 
         data = await self.bot.db.get_messages_leaderboard(guild.id, since)
 
+        staff_role_id = self.bot.config_manager.get_staff_role()
+        if staff_role_id:
+            staff_role = guild.get_role(staff_role_id)
+            if staff_role:
+                for member in staff_role.members:
+                    if member.id not in data:
+                        data[member.id] = 0
+
         if not data:
             lines = ["No messages yet."]
         else:
