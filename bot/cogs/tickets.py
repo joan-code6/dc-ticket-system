@@ -213,11 +213,28 @@ class TicketCategorySelect(ui.Select):
             for q, a in answers.items():
                 embed.add_field(name=q, value=a or "No answer", inline=False)
 
-        await channel.send(
+        msg = await channel.send(
             content=f"{role.mention} {creator.mention}",
             embed=embed,
             view=TicketActionView(),
         )
+
+        opening_lines = [f"**Ticket #{ticket_id} opened**", f"Category: {category}"]
+        if answers:
+            opening_lines.append("")
+            for q, a in answers.items():
+                opening_lines.append(f"**{q}**: {a or 'No answer'}")
+        opening_content = "\n".join(opening_lines)
+        await bot.db.add_transcript_message(
+            ticket_id,
+            msg.id,
+            bot.user.id,
+            bot.user.display_name,
+            opening_content,
+            msg.created_at,
+            [],
+        )
+
         await interaction.followup.send(
             f"Ticket created: {channel.mention}", ephemeral=True
         )
