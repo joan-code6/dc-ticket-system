@@ -3,6 +3,7 @@ from discord import ui
 from discord.ext import commands
 from typing import TYPE_CHECKING
 from datetime import datetime, timezone
+import asyncio
 import json
 import re
 
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
 
 from utils.archive import archive_attachments
 from utils.checks import check_staff_role
+from utils import ai
 
 
 def _format_discord_time(ts_str: str | None) -> str | None:
@@ -20,21 +22,28 @@ def _format_discord_time(ts_str: str | None) -> str | None:
         if "T" in ts_str:
             dt = datetime.fromisoformat(ts_str)
         else:
-            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(
+                tzinfo=timezone.utc
+            )
         return f"<t:{int(dt.timestamp())}:R>"
     except Exception:
         return ts_str
 
 
-async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Guild) -> discord.Embed:
+async def build_ticket_summary(
+    bot: "TicketBot", ticket: dict, guild: discord.Guild
+) -> discord.Embed:
     embed = discord.Embed(
-        title=f"Ticket #{ticket['id']} — Deleted",
-        color=discord.Color.dark_red()
+        title=f"Ticket #{ticket['id']} — Deleted", color=discord.Color.dark_red()
     )
     embed.add_field(name="Category", value=ticket["category"], inline=True)
 
     creator = guild.get_member(ticket["creator_id"])
-    embed.add_field(name="Creator", value=creator.mention if creator else f"<@{ticket['creator_id']}>", inline=True)
+    embed.add_field(
+        name="Creator",
+        value=creator.mention if creator else f"<@{ticket['creator_id']}>",
+        inline=True,
+    )
 
     assigned_ids = json.loads(ticket["assigned_ids"])
     assigned_text = "None"
@@ -54,7 +63,11 @@ async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Gu
     closer_id = await bot.db.get_ticket_closer(ticket["id"])
     if closer_id:
         closer = guild.get_member(closer_id)
-        embed.add_field(name="Closed by", value=closer.mention if closer else f"<@{closer_id}>", inline=True)
+        embed.add_field(
+            name="Closed by",
+            value=closer.mention if closer else f"<@{closer_id}>",
+            inline=True,
+        )
 
     close_reason = ticket.get("close_reason")
     if close_reason:
@@ -68,12 +81,14 @@ async def build_ticket_summary(bot: "TicketBot", ticket: dict, guild: discord.Gu
             author_name = uc["author_name"]
             count = uc["count"]
             lines.append(f"`{count}` - <@{author_id}> - {author_name}")
-        embed.add_field(name="Users in Transcript", value="\n".join(lines), inline=False)
+        embed.add_field(
+            name="Users in Transcript", value="\n".join(lines), inline=False
+        )
 
     embed.add_field(
         name="Full Transcript",
         value=f"Use `/transcript view {ticket['id']}` to see all messages.",
-        inline=False
+        inline=False,
     )
 
     return embed
@@ -84,7 +99,7 @@ class TicketCategorySelect(ui.Select):
         options = []
         for name in categories.keys():
             cfg = categories[name]
-            match = re.match(r'^<(a?:)?(\w+):(\d+)>\s*(.*)', name)
+            match = re.match(r"^<(a?:)?(\w+):(\d+)>\s*(.*)", name)
             if match:
                 emoji_name = match.group(2)
                 emoji_id = int(match.group(3))
@@ -93,10 +108,14 @@ class TicketCategorySelect(ui.Select):
             else:
                 label = name
                 emoji = None
-            options.append(
-                discord.SelectOption(label=label, value=name, emoji=emoji)
-            )
-        super().__init__(placeholder="Choose a ticket category...", min_values=1, max_values=1, options=options, custom_id="ticket_category_select")
+            options.append(discord.SelectOption(label=label, value=name, emoji=emoji))
+        super().__init__(
+            placeholder="Choose a ticket category...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="ticket_category_select",
+        )
         self.categories = categories
 
     async def callback(self, interaction: discord.Interaction):
@@ -106,9 +125,14 @@ class TicketCategorySelect(ui.Select):
 
         # Check if user already has an open ticket
         bot: TicketBot = interaction.client
-        existing = await bot.db.get_open_ticket_by_user(interaction.user.id, interaction.guild_id)
+        existing = await bot.db.get_open_ticket_by_user(
+            interaction.user.id, interaction.guild_id
+        )
         if existing:
-            await interaction.response.send_message("You already have an open ticket! Please close it before opening a new one.", ephemeral=True)
+            await interaction.response.send_message(
+                "You already have an open ticket! Please close it before opening a new one.",
+                ephemeral=True,
+            )
             return
 
         if not questions:
@@ -119,29 +143,39 @@ class TicketCategorySelect(ui.Select):
         modal = TicketQuestionsModal(category, questions, self.create_ticket)
         await interaction.response.send_modal(modal)
 
-    async def create_ticket(self, interaction: discord.Interaction, category: str, answers: dict):
+    async def create_ticket(
+        self, interaction: discord.Interaction, category: str, answers: dict
+    ):
         bot: TicketBot = interaction.client
         cfg = bot.config_manager.get_category(category)
         if not cfg:
-            await interaction.followup.send("Category configuration missing.", ephemeral=True)
+            await interaction.followup.send(
+                "Category configuration missing.", ephemeral=True
+            )
             return
 
         guild = interaction.guild
         creator = interaction.user
         discord_category = guild.get_channel(cfg["discord_category_id"])
         if not discord_category:
-            await interaction.followup.send("Ticket category channel not found.", ephemeral=True)
+            await interaction.followup.send(
+                "Ticket category channel not found.", ephemeral=True
+            )
             return
 
         # Role setup
         role_name = cfg["role_name"]
         role = discord.utils.get(guild.roles, name=role_name)
         if not role:
-            role = await guild.create_role(name=role_name, reason="Ticket system auto-created role")
+            role = await guild.create_role(
+                name=role_name, reason="Ticket system auto-created role"
+            )
 
         # Channel naming
         base_name = creator.name.lower()
-        existing_channels = [c.name for c in guild.channels if c.name.startswith(base_name)]
+        existing_channels = [
+            c.name for c in guild.channels if c.name.startswith(base_name)
+        ]
         if base_name in existing_channels:
             count = 1
             while f"{base_name}-{count}" in existing_channels:
@@ -152,7 +186,9 @@ class TicketCategorySelect(ui.Select):
 
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            guild.me: discord.PermissionOverwrite(view_channel=True, send_messages=True, manage_channels=True),
+            guild.me: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, manage_channels=True
+            ),
             creator: discord.PermissionOverwrite(view_channel=True, send_messages=True),
             role: discord.PermissionOverwrite(view_channel=True, send_messages=True),
         }
@@ -161,10 +197,12 @@ class TicketCategorySelect(ui.Select):
             name=channel_name,
             category=discord_category,
             overwrites=overwrites,
-            reason=f"Ticket created by {creator}"
+            reason=f"Ticket created by {creator}",
         )
 
-        ticket_id = await bot.db.create_ticket(guild.id, channel.id, creator.id, category)
+        ticket_id = await bot.db.create_ticket(
+            guild.id, channel.id, creator.id, category
+        )
         await bot.db.add_ticket_log(ticket_id, "open", creator.id, {"answers": answers})
 
         embed = discord.Embed(title=f"Ticket #{ticket_id}", color=discord.Color.blue())
@@ -175,8 +213,14 @@ class TicketCategorySelect(ui.Select):
             for q, a in answers.items():
                 embed.add_field(name=q, value=a or "No answer", inline=False)
 
-        await channel.send(content=f"{role.mention} {creator.mention}", embed=embed, view=TicketActionView())
-        await interaction.followup.send(f"Ticket created: {channel.mention}", ephemeral=True)
+        await channel.send(
+            content=f"{role.mention} {creator.mention}",
+            embed=embed,
+            view=TicketActionView(),
+        )
+        await interaction.followup.send(
+            f"Ticket created: {channel.mention}", ephemeral=True
+        )
 
         # Update stats
         stats_cog = bot.get_cog("StatsCog")
@@ -192,7 +236,7 @@ class TicketCategoryView(ui.View):
 
 class TicketQuestionsModal(ui.Modal):
     def __init__(self, category: str, questions: list, on_submit_callback):
-        label_match = re.match(r'^<(a?:)?\w+:\d+>\s*(.*)', category)
+        label_match = re.match(r"^<(a?:)?\w+:\d+>\s*(.*)", category)
         name = label_match.group(2) if label_match else category
         super().__init__(title=f"{name} Ticket")
         self.category = category
@@ -202,13 +246,19 @@ class TicketQuestionsModal(ui.Modal):
             if isinstance(q, dict):
                 text = q.get("text", "")
                 required = q.get("required", False)
-                style = discord.TextStyle.long if q.get("style") == "long" else discord.TextStyle.short
+                style = (
+                    discord.TextStyle.long
+                    if q.get("style") == "long"
+                    else discord.TextStyle.short
+                )
             else:
                 text = q
                 required = False
                 style = discord.TextStyle.short
             label = text[:45]
-            text_input = ui.TextInput(label=label, style=style, required=required, custom_id=f"q{i}")
+            text_input = ui.TextInput(
+                label=label, style=style, required=required, custom_id=f"q{i}"
+            )
             self.question_map[f"q{i}"] = label
             self.add_item(text_input)
 
@@ -225,17 +275,25 @@ class TicketActionView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Close Ticket", style=discord.ButtonStyle.danger, custom_id="ticket_close_button")
+    @ui.button(
+        label="Close Ticket",
+        style=discord.ButtonStyle.danger,
+        custom_id="ticket_close_button",
+    )
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         if not await check_staff_role(interaction):
             return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
-            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            await interaction.response.send_message(
+                "This is not a ticket channel.", ephemeral=True
+            )
             return
         if ticket["status"] == "closed":
-            await interaction.response.send_message("This ticket is already closed.", ephemeral=True)
+            await interaction.response.send_message(
+                "This ticket is already closed.", ephemeral=True
+            )
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -244,8 +302,13 @@ class TicketActionView(ui.View):
         async for msg in channel.history(limit=None, oldest_first=True):
             attachments = [a.url for a in msg.attachments]
             await bot.db.add_transcript_message(
-                ticket["id"], msg.id, msg.author.id, msg.author.display_name,
-                msg.content, msg.created_at, attachments
+                ticket["id"],
+                msg.id,
+                msg.author.id,
+                msg.author.display_name,
+                msg.content,
+                msg.created_at,
+                attachments,
             )
 
         await bot.db.close_ticket(ticket["id"])
@@ -253,7 +316,9 @@ class TicketActionView(ui.View):
 
         creator = interaction.guild.get_member(ticket["creator_id"])
         if creator:
-            await channel.set_permissions(creator, view_channel=True, send_messages=False)
+            await channel.set_permissions(
+                creator, view_channel=True, send_messages=False
+            )
 
         stats_cog = bot.get_cog("StatsCog")
         if stats_cog:
@@ -262,25 +327,35 @@ class TicketActionView(ui.View):
         await interaction.followup.send("Ticket closed.", ephemeral=True)
         await channel.send(
             f"🔒 This ticket has been closed by {interaction.user.mention}.",
-            view=CloseActionView()
+            view=CloseActionView(),
         )
 
-    @ui.button(label="Assign to Me", style=discord.ButtonStyle.green, custom_id="ticket_assign_button")
+    @ui.button(
+        label="Assign to Me",
+        style=discord.ButtonStyle.green,
+        custom_id="ticket_assign_button",
+    )
     async def assign_to_me(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         if not await check_staff_role(interaction):
             return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
-            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            await interaction.response.send_message(
+                "This is not a ticket channel.", ephemeral=True
+            )
             return
         if ticket["status"] == "closed":
-            await interaction.response.send_message("This ticket is closed.", ephemeral=True)
+            await interaction.response.send_message(
+                "This ticket is closed.", ephemeral=True
+            )
             return
 
         assigned = json.loads(ticket["assigned_ids"])
         if interaction.user.id in assigned:
-            await interaction.response.send_message("You are already assigned to this ticket.", ephemeral=True)
+            await interaction.response.send_message(
+                "You are already assigned to this ticket.", ephemeral=True
+            )
             return
 
         await interaction.response.defer()
@@ -291,15 +366,23 @@ class TicketActionView(ui.View):
         await bot.db.add_ticket_log(ticket["id"], "claim", interaction.user.id)
 
         channel = interaction.channel
-        await channel.set_permissions(interaction.user, view_channel=True, send_messages=True)
+        await channel.set_permissions(
+            interaction.user, view_channel=True, send_messages=True
+        )
 
         async for msg in channel.history(limit=50):
-            if msg.embeds and msg.embeds[0].title and msg.embeds[0].title.startswith("Ticket #"):
+            if (
+                msg.embeds
+                and msg.embeds[0].title
+                and msg.embeds[0].title.startswith("Ticket #")
+            ):
                 embed = msg.embeds[0]
                 mentions = " ".join(f"<@{uid}>" for uid in assigned)
                 for i, field in enumerate(embed.fields):
                     if field.name == "Assigned":
-                        embed.set_field_at(i, name="Assigned", value=mentions, inline=False)
+                        embed.set_field_at(
+                            i, name="Assigned", value=mentions, inline=False
+                        )
                         try:
                             await msg.edit(embed=embed)
                         except discord.HTTPException:
@@ -311,24 +394,34 @@ class TicketActionView(ui.View):
         if stats_cog:
             await stats_cog.update_stats(interaction.guild)
 
-        await interaction.followup.send(f"{interaction.user.mention} has been assigned to this ticket.")
+        await interaction.followup.send(
+            f"{interaction.user.mention} has been assigned to this ticket."
+        )
 
 
 class CloseActionView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Delete", style=discord.ButtonStyle.danger, custom_id="ticket_delete_button")
+    @ui.button(
+        label="Delete",
+        style=discord.ButtonStyle.danger,
+        custom_id="ticket_delete_button",
+    )
     async def delete_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         if not await check_staff_role(interaction):
             return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
-            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            await interaction.response.send_message(
+                "This is not a ticket channel.", ephemeral=True
+            )
             return
         if ticket["status"] != "closed":
-            await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+            await interaction.response.send_message(
+                "This ticket is not closed.", ephemeral=True
+            )
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -345,23 +438,35 @@ class CloseActionView(ui.View):
         archive_channel_id = bot.config_manager.get_archive_channel()
         if archive_channel_id:
             await archive_attachments(
-                bot, channel, ticket["id"], bot.db, archive_channel_id,
+                bot,
+                channel,
+                ticket["id"],
+                bot.db,
+                archive_channel_id,
                 ticket_name=f"#{ticket['id']}",
             )
 
         await channel.delete(reason=f"Ticket deleted by {interaction.user}")
 
-    @ui.button(label="Reopen", style=discord.ButtonStyle.green, custom_id="ticket_reopen_button")
+    @ui.button(
+        label="Reopen",
+        style=discord.ButtonStyle.green,
+        custom_id="ticket_reopen_button",
+    )
     async def reopen_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         if not await check_staff_role(interaction):
             return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
-            await interaction.response.send_message("This is not a ticket channel.", ephemeral=True)
+            await interaction.response.send_message(
+                "This is not a ticket channel.", ephemeral=True
+            )
             return
         if ticket["status"] != "closed":
-            await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+            await interaction.response.send_message(
+                "This ticket is not closed.", ephemeral=True
+            )
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -372,13 +477,17 @@ class CloseActionView(ui.View):
         channel = interaction.channel
         creator = interaction.guild.get_member(ticket["creator_id"])
         if creator:
-            await channel.set_permissions(creator, view_channel=True, send_messages=True)
+            await channel.set_permissions(
+                creator, view_channel=True, send_messages=True
+            )
 
         stats_cog = bot.get_cog("StatsCog")
         if stats_cog:
             await stats_cog.update_stats(interaction.guild)
 
-        await interaction.message.edit(view=None, content=interaction.message.content + "\n\n✅ Reopened")
+        await interaction.message.edit(
+            view=None, content=interaction.message.content + "\n\n✅ Reopened"
+        )
         await channel.send(f"🔓 Ticket reopened by {interaction.user.mention}.")
         await interaction.followup.send("Ticket reopened.", ephemeral=True)
 
@@ -387,15 +496,24 @@ class CreateTicketButton(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Create Ticket", style=discord.ButtonStyle.secondary, emoji="🎫", custom_id="create_ticket_button")
+    @ui.button(
+        label="Create Ticket",
+        style=discord.ButtonStyle.secondary,
+        emoji="🎫",
+        custom_id="create_ticket_button",
+    )
     async def create_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
         categories = bot.config_manager.get_categories()
         if not categories:
-            await interaction.response.send_message("No ticket categories configured.", ephemeral=True)
+            await interaction.response.send_message(
+                "No ticket categories configured.", ephemeral=True
+            )
             return
         view = TicketCategoryView(categories)
-        await interaction.response.send_message("Select a category:", view=view, ephemeral=True)
+        await interaction.response.send_message(
+            "Select a category:", view=view, ephemeral=True
+        )
 
 
 class TicketsCog(commands.Cog):
@@ -406,14 +524,64 @@ class TicketsCog(commands.Cog):
     async def on_message(self, message: discord.Message):
         if not message.guild:
             return
+        if message.author.bot:
+            return
         ticket = await self.bot.db.get_ticket_by_channel(message.channel.id)
         if not ticket:
             return
         attachments = [a.url for a in message.attachments]
         await self.bot.db.add_transcript_message(
-            ticket["id"], message.id, message.author.id, message.author.display_name,
-            message.content, message.created_at, attachments
+            ticket["id"],
+            message.id,
+            message.author.id,
+            message.author.display_name,
+            message.content,
+            message.created_at,
+            attachments,
         )
+
+        if ticket["status"] != "open":
+            return
+        if ticket.get("title") is not None:
+            return
+        if not ai.is_available():
+            return
+        if ai.is_processing(ticket["id"]):
+            return
+
+        ai.mark_processing(ticket["id"])
+        try:
+            msgs = await self.bot.db.get_recent_transcript_messages(
+                ticket["id"], limit=30
+            )
+            if len(msgs) < 2:
+                return
+            conversation_lines = []
+            for m in msgs:
+                content = m["content"] or ""
+                if not content.strip():
+                    continue
+                conversation_lines.append(f"{m['author_name']}: {content}")
+            if not conversation_lines:
+                return
+            conversation = "\n".join(conversation_lines)
+
+            title = await ai.suggest_ticket_title(conversation)
+            if title is None:
+                return
+
+            await self.bot.db.set_ticket_title(ticket["id"], title)
+            await self.bot.db.add_ticket_log(
+                ticket["id"],
+                "rename",
+                self.bot.user.id,
+                {"old_name": message.channel.name, "new_name": title, "ai": True},
+            )
+            await message.channel.edit(name=title)
+        except Exception:
+            pass
+        finally:
+            ai.unmark_processing(ticket["id"])
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -435,6 +603,7 @@ class TicketsCog(commands.Cog):
         categories = self.bot.config_manager.get_categories()
         if categories:
             self.bot.add_view(TicketCategoryView(categories))
+
 
 async def setup(bot: "TicketBot"):
     await bot.add_cog(TicketsCog(bot))

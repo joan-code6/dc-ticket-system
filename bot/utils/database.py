@@ -78,6 +78,11 @@ class Database:
             await self.conn.commit()
         except Exception:
             pass
+        try:
+            await self.conn.execute("ALTER TABLE tickets ADD COLUMN title TEXT")
+            await self.conn.commit()
+        except Exception:
+            pass
 
     async def create_ticket(
         self, guild_id: int, channel_id: int, creator_id: int, category: str
@@ -209,10 +214,27 @@ class Database:
             row = await cursor.fetchone()
             return row["user_id"] if row else None
 
+    async def set_ticket_title(self, ticket_id: int, title: str):
+        await self.conn.execute(
+            "UPDATE tickets SET title = ? WHERE id = ?",
+            (title, ticket_id),
+        )
+        await self.conn.commit()
+
     async def get_transcript_messages(self, ticket_id: int) -> List[Dict[str, Any]]:
         async with self.conn.execute(
             "SELECT * FROM transcript_messages WHERE ticket_id = ? ORDER BY timestamp ASC",
             (ticket_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            return [dict(row) for row in rows]
+
+    async def get_recent_transcript_messages(
+        self, ticket_id: int, limit: int = 20
+    ) -> List[Dict[str, Any]]:
+        async with self.conn.execute(
+            "SELECT * FROM transcript_messages WHERE ticket_id = ? ORDER BY timestamp ASC LIMIT ?",
+            (ticket_id, limit),
         ) as cursor:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
