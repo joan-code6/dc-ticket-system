@@ -67,12 +67,16 @@ class StatsLeaderboardView(discord.ui.View):
         data = await self.bot.db.get_interaction_leaderboard(guild.id, since)
 
         staff_role_id = self.bot.config_manager.get_staff_role()
+        staff_ids = set()
         if staff_role_id:
             staff_role = guild.get_role(staff_role_id)
             if staff_role:
-                for member in staff_role.members:
-                    if member.id not in data:
-                        data[member.id] = 0
+                staff_ids = {m.id for m in staff_role.members}
+                for sid in staff_ids:
+                    if sid not in data:
+                        data[sid] = 0
+
+        data = {uid: count for uid, count in data.items() if uid in staff_ids}
 
         # Build description lines
         if not data:
@@ -156,12 +160,16 @@ class ClaimsLeaderboardView(discord.ui.View):
         data = await self.bot.db.get_claims_leaderboard(guild.id, since)
 
         staff_role_id = self.bot.config_manager.get_staff_role()
+        staff_ids = set()
         if staff_role_id:
             staff_role = guild.get_role(staff_role_id)
             if staff_role:
-                for member in staff_role.members:
-                    if member.id not in data:
-                        data[member.id] = 0
+                staff_ids = {m.id for m in staff_role.members}
+                for sid in staff_ids:
+                    if sid not in data:
+                        data[sid] = 0
+
+        data = {uid: count for uid, count in data.items() if uid in staff_ids}
 
         if not data:
             lines = ["No claims yet."]
@@ -244,12 +252,16 @@ class MessagesLeaderboardView(discord.ui.View):
         data = await self.bot.db.get_messages_leaderboard(guild.id, since)
 
         staff_role_id = self.bot.config_manager.get_staff_role()
+        staff_ids = set()
         if staff_role_id:
             staff_role = guild.get_role(staff_role_id)
             if staff_role:
-                for member in staff_role.members:
-                    if member.id not in data:
-                        data[member.id] = 0
+                staff_ids = {m.id for m in staff_role.members}
+                for sid in staff_ids:
+                    if sid not in data:
+                        data[sid] = 0
+
+        data = {uid: count for uid, count in data.items() if uid in staff_ids}
 
         if not data:
             lines = ["No messages yet."]
