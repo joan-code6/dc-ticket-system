@@ -10,7 +10,7 @@ import re
 if TYPE_CHECKING:
     from main import TicketBot
 
-from utils.archive import archive_attachments
+from utils.archive import archive_single_attachment
 from utils.checks import check_staff_role
 from utils import ai
 
@@ -452,17 +452,6 @@ class CloseActionView(ui.View):
                 embed = await build_ticket_summary(bot, ticket, interaction.guild)
                 await transcript_channel.send(embed=embed)
 
-        archive_channel_id = bot.config_manager.get_archive_channel()
-        if archive_channel_id:
-            await archive_attachments(
-                bot,
-                channel,
-                ticket["id"],
-                bot.db,
-                archive_channel_id,
-                ticket_name=f"#{ticket['id']}",
-            )
-
         await channel.delete(reason=f"Ticket deleted by {interaction.user}")
 
     @ui.button(
@@ -546,7 +535,22 @@ class TicketsCog(commands.Cog):
         ticket = await self.bot.db.get_ticket_by_channel(message.channel.id)
         if not ticket:
             return
-        attachments = [a.url for a in message.attachments]
+        archive_channel_id = self.bot.config_manager.get_archive_channel()
+        attachments = []
+        for att in message.attachments:
+            if archive_channel_id:
+                archived_url = await archive_single_attachment(
+                    self.bot,
+                    archive_channel_id,
+                    ticket["id"],
+                    f"#{ticket['id']}",
+                    att.url,
+                    att.filename,
+                )
+                attachments.append(archived_url if archived_url else att.url)
+            else:
+                attachments.append(att.url)
+
         await self.bot.db.add_transcript_message(
             ticket["id"],
             message.id,
@@ -607,7 +611,22 @@ class TicketsCog(commands.Cog):
         ticket = await self.bot.db.get_ticket_by_channel(after.channel.id)
         if not ticket:
             return
-        attachments = [a.url for a in after.attachments]
+        archive_channel_id = self.bot.config_manager.get_archive_channel()
+        attachments = []
+        for att in after.attachments:
+            if archive_channel_id:
+                archived_url = await archive_single_attachment(
+                    self.bot,
+                    archive_channel_id,
+                    ticket["id"],
+                    f"#{ticket['id']}",
+                    att.url,
+                    att.filename,
+                )
+                attachments.append(archived_url if archived_url else att.url)
+            else:
+                attachments.append(att.url)
+
         await self.bot.db.update_transcript_message_content(
             ticket["id"], after.id, after.content, attachments
         )
