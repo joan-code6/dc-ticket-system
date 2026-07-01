@@ -70,6 +70,53 @@ async def suggest_ticket_title(conversation: str) -> str | None:
     return _sanitize_channel_name(title)
 
 
+async def summarize_ticket(conversation: str) -> str | None:
+    if not HC_AI_API_KEY:
+        return None
+
+    def _call():
+        from openrouter import OpenRouter
+
+        client = OpenRouter(
+            api_key=HC_AI_API_KEY,
+            server_url="https://ai.hackclub.com/proxy/v1",
+        )
+        response = client.chat.send(
+            model="deepseek/deepseek-v4-flash",
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a support ticket summarizer. Analyze the conversation and "
+                        "produce a concise, structured summary. Use this format:\n\n"
+                        "**Issue**: Brief one-line description of the problem.\n"
+                        "**Key Points**: Bullet list of important details discussed.\n"
+                        "**Resolution**: Current status — resolved, in progress, or unresolved.\n"
+                        "**Participants**: Who was involved.\n\n"
+                        "Keep the total summary under 600 characters. Be factual, no fluff. "
+                        "You are replying in Discord so use their features."
+                    ),
+                },
+                {"role": "user", "content": f"Ticket conversation:\n\n{conversation}"},
+            ],
+            stream=False,
+            temperature=0.3,
+            max_tokens=600,
+        )
+        return response.choices[0].message.content.strip()
+
+    try:
+        raw = await asyncio.to_thread(_call)
+    except ImportError:
+        logger.warning("openrouter package not installed. Run: pip install openrouter")
+        return None
+    except Exception as e:
+        logger.warning(f"AI summarization failed: {e}")
+        return None
+
+    return raw or None
+
+
 def is_processing(ticket_id: int) -> bool:
     return ticket_id in _processing
 

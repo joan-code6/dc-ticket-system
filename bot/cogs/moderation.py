@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from main import TicketBot
 
 from utils.checks import has_staff_role
+from utils import ai
 
 
 class ModerationCog(commands.Cog):
@@ -233,8 +234,131 @@ class ModerationCog(commands.Cog):
             return
 
         await interaction.channel.edit(name=name)
+        await self.bot.db.set_ticket_title(ticket["id"], name)
         await self.bot.db.add_ticket_log(ticket["id"], "rename", interaction.user.id, {"new_name": name})
         await interaction.response.send_message(f"Channel renamed to `{name}`.")
+
+    @app_commands.command(name="ai-summarize", description="Summarize this ticket using AI")
+    @app_commands.check(has_staff_role)
+    async def ai_summarize(self, interaction: discord.Interaction):
+        if not ai.is_available():
+            await interaction.response.send_message(
+                "AI features are not configured. Set the `HC_AI_API_KEY` environment variable.",
+                ephemeral=True,
+            )
+            return
+
+        ticket = await self._get_ticket(interaction)
+        if not ticket:
+            return
+
+        if ai.is_processing(ticket["id"]):
+            await interaction.response.send_message(
+                "An AI operation is already running for this ticket. Please wait.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer()
+
+        ai.mark_processing(ticket["id"])
+        try:
+            msgs = await self.bot.db.get_transcript_messages(ticket["id"])
+            if not msgs:
+                await interaction.followup.send("No transcript messages found for this ticket.", ephemeral=True)
+                return
+
+            conversation_lines = []
+            for m in msgs:
+                content = m["content"] or ""
+                if not content.strip():
+                    continue
+                conversation_lines.append(f"{m['author_name']}: {content}")
+            if not conversation_lines:
+                await interaction.followup.send("No text content found in transcript.", ephemeral=True)
+                return
+            conversation = "\n".join(conversation_lines)
+
+            summary = await ai.summarize_ticket(conversation)
+            if summary is None:
+                await interaction.followup.send("AI summarization failed. The API may be unavailable.", ephemeral=True)
+                return
+
+            embed = discord.Embed(
+                title=f"Ticket #{ticket['id']} — AI Summary",
+                description=summary,
+                color=discord.Color.blue(),
+            )
+            await interaction.followup.send(embed=embed)
+        except Exception:
+            await interaction.followup.send("An error occurred during summarization.", ephemeral=True)
+        finally:
+            ai.unmark_processing(ticket["id"])
+
+    @app_commands.command(name="ai-rename", description="Rename this ticket channel using AI")
+    @app_commands.check(has_staff_role)
+    async def ai_rename(self, interaction: discord.Interaction):
+        if not ai.is_available():
+            await interaction.response.send_message(
+                "AI features are not configured. Set the `HC_AI_API_KEY` environment variable.",
+                ephemeral=True,
+            )
+            return
+
+        ticket = await self._get_ticket(interaction)
+        if not ticket:
+            return
+
+        if ticket["status"] == "closed":
+            await interaction.response.send_message("This ticket is closed.", ephemeral=True)
+            return
+
+        if ai.is_processing(ticket["id"]):
+            await interaction.response.send_message(
+                "An AI operation is already running for this ticket. Please wait.",
+                ephemeral=True,
+            )
+            return
+
+        await interaction.response.defer()
+
+        ai.mark_processing(ticket["id"])
+        try:
+            msgs = await self.bot.db.get_recent_transcript_messages(ticket["id"], limit=30)
+            if len(msgs) < 2:
+                await interaction.followup.send("Not enough messages to suggest a name.", ephemeral=True)
+                return
+
+            conversation_lines = []
+            for m in msgs:
+                content = m["content"] or ""
+                if not content.strip():
+                    continue
+                conversation_lines.append(f"{m['author_name']}: {content}")
+            if not conversation_lines:
+                await interaction.followup.send("No text content found in transcript.", ephemeral=True)
+                return
+            conversation = "\n".join(conversation_lines)
+
+            title = await ai.suggest_ticket_title(conversation)
+            if title is None:
+                await interaction.followup.send("Could not determine a suitable name from the conversation.", ephemeral=True)
+                return
+
+            old_name = interaction.channel.name
+            await interaction.channel.edit(name=title)
+            await self.bot.db.set_ticket_title(ticket["id"], title)
+            await self.bot.db.add_ticket_log(
+                ticket["id"],
+                "rename",
+                interaction.user.id,
+                {"old_name": old_name, "new_name": title, "ai": True},
+            )
+            await interaction.followup.send(f"Channel renamed to `{title}`.")
+        except Exception:
+            await interaction.followup.send("An error occurred during rename.", ephemeral=True)
+        finally:
+            ai.unmark_processing(ticket["id"])
 
 async def setup(bot: "TicketBot"):
     await bot.add_cog(ModerationCog(bot))
