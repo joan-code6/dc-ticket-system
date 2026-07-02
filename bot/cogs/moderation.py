@@ -11,6 +11,16 @@ from utils.checks import has_staff_role
 from utils import ai
 
 
+async def _move_category_autocomplete(
+    interaction: discord.Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    from main import TicketBot
+    bot: TicketBot = interaction.client
+    categories = bot.config_manager.get_category_names()
+    matches = [c for c in categories if current.lower() in c.lower()]
+    return [app_commands.Choice(name=c[:100], value=c[:100]) for c in matches[:25]]
+
+
 class ModerationCog(commands.Cog):
     def __init__(self, bot: "TicketBot"):
         self.bot = bot
@@ -51,13 +61,6 @@ class ModerationCog(commands.Cog):
                         except discord.HTTPException:
                             pass
                         return
-
-    async def _move_category_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        categories = self.bot.config_manager.get_category_names()
-        matches = [c for c in categories if current.lower() in c.lower()]
-        return [app_commands.Choice(name=c[:100], value=c[:100]) for c in matches[:25]]
 
     async def _refresh_stats(self, guild: discord.Guild):
         stats_cog = self.bot.get_cog("StatsCog")
@@ -259,7 +262,7 @@ class ModerationCog(commands.Cog):
 
     @app_commands.command(name="move", description="Move this ticket to another category")
     @app_commands.describe(category="Target category")
-    @app_commands.autocomplete(category=ModerationCog._move_category_autocomplete)
+    @app_commands.autocomplete(category=_move_category_autocomplete)
     @app_commands.check(has_staff_role)
     async def move(self, interaction: discord.Interaction, category: str):
         ticket = await self._get_ticket(interaction)
