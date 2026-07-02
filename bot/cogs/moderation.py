@@ -257,6 +257,77 @@ class ModerationCog(commands.Cog):
         await self.bot.db.add_ticket_log(ticket["id"], "rename", interaction.user.id, {"new_name": name})
         await interaction.response.send_message(f"Channel renamed to `{name}`.")
 
+    @app_commands.command(name="move", description="Move this ticket to another category")
+    @app_commands.describe(category="Target category")
+    @app_commands.autocomplete(category=ModerationCog._move_category_autocomplete)
+    @app_commands.check(has_staff_role)
+    async def move(self, interaction: discord.Interaction, category: str):
+        ticket = await self._get_ticket(interaction)
+        if not ticket:
+            return
+        if ticket["status"] == "closed":
+            await interaction.response.send_message("This ticket is closed.", ephemeral=True)
+            return
+
+        old_category = ticket["category"]
+        if old_category == category:
+            await interaction.response.send_message(
+                "This ticket is already in that category.", ephemeral=True
+            )
+            return
+
+        cfg = self.bot.config_manager.get_category(category)
+        if not cfg:
+            names = self.bot.config_manager.get_category_names()
+            hint = f" Available: {', '.join(f'`{n}`' for n in names[:10])}"
+            if len(names) > 10:
+                hint += f" (+{len(names) - 10} more)"
+            await interaction.response.send_message(
+                f"Category `{category}` not found.{hint}", ephemeral=True
+            )
+            return
+
+        guild = interaction.guild
+        discord_category = guild.get_channel(cfg["discord_category_id"])
+        if not discord_category:
+            await interaction.response.send_message(
+                "Target category channel not found on this server.", ephemeral=True
+            )
+            return
+
+        channel = interaction.channel
+
+        old_cfg = self.bot.config_manager.get_category(old_category)
+        new_role = None
+        new_role_name = cfg["role_name"]
+        new_role = discord.utils.get(guild.roles, name=new_role_name)
+        if not new_role:
+            new_role = await guild.create_role(
+                name=new_role_name, reason="Ticket system auto-created role"
+            )
+
+        if old_cfg:
+            old_role_name = old_cfg["role_name"]
+            if old_role_name != new_role_name:
+                old_role = discord.utils.get(guild.roles, name=old_role_name)
+                if old_role:
+                    await channel.set_permissions(old_role, overwrite=None)
+
+        await channel.set_permissions(new_role, view_channel=True, send_messages=True)
+
+        await self.bot.db.update_ticket_category(ticket["id"], category)
+        await self.bot.db.add_ticket_log(
+            ticket["id"], "move", interaction.user.id,
+            {"old_category": old_category, "new_category": category}
+        )
+
+        await channel.edit(category=discord_category)
+        await self._update_embed_category(channel, category)
+        await self._refresh_stats(guild)
+        await interaction.response.send_message(
+            f"Ticket moved from **{old_category}** to **{category}**."
+        )
+
     @app_commands.command(name="ai-summarize", description="Summarize this ticket using AI")
     @app_commands.check(has_staff_role)
     async def ai_summarize(self, interaction: discord.Interaction):
