@@ -541,10 +541,25 @@ class CloseRequestView(ui.View):
 
         await interaction.response.defer(ephemeral=True)
 
-        await bot.db.close_ticket(ticket["id"])
-        await bot.db.add_ticket_log(ticket["id"], "close", interaction.user.id)
-
         channel = interaction.channel
+
+        async for msg in channel.history(limit=None, oldest_first=True):
+            attachments = [a.url for a in msg.attachments]
+            await bot.db.add_transcript_message(
+                ticket["id"],
+                msg.id,
+                msg.author.id,
+                msg.author.display_name,
+                msg.content,
+                msg.created_at,
+                attachments,
+            )
+
+        await bot.db.close_ticket(ticket["id"])
+        await bot.db.add_ticket_log(
+            ticket["id"], "close", interaction.user.id, {"via": "close_request"}
+        )
+
         creator = interaction.guild.get_member(ticket["creator_id"])
         if creator:
             await channel.set_permissions(
@@ -555,8 +570,11 @@ class CloseRequestView(ui.View):
         if transcript_channel_id:
             transcript_channel = interaction.guild.get_channel(transcript_channel_id)
             if transcript_channel:
-                embed = await build_ticket_summary(bot, ticket, interaction.guild)
-                await transcript_channel.send(embed=embed)
+                try:
+                    embed = await build_ticket_summary(bot, ticket, interaction.guild)
+                    await transcript_channel.send(embed=embed)
+                except Exception:
+                    pass
 
         stats_cog = bot.get_cog("StatsCog")
         if stats_cog:
