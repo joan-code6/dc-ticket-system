@@ -299,8 +299,6 @@ class TicketActionView(ui.View):
     )
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
         bot: TicketBot = interaction.client
-        if not await check_staff_role(interaction):
-            return
         ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
         if not ticket:
             await interaction.response.send_message(
@@ -311,6 +309,24 @@ class TicketActionView(ui.View):
             await interaction.response.send_message(
                 "This ticket is already closed.", ephemeral=True
             )
+            return
+
+        if interaction.user.id == ticket["creator_id"]:
+            await interaction.response.send_message(
+                "Close request sent. A staff member will review it.", ephemeral=True
+            )
+            await bot.db.add_ticket_log(
+                ticket["id"], "close_request", interaction.user.id
+            )
+            embed = discord.Embed(
+                title="Close Request",
+                description=f"{interaction.user.mention} has requested this ticket be closed.",
+                color=discord.Color.orange(),
+            )
+            await interaction.channel.send(embed=embed, view=CloseRequestView())
+            return
+
+        if not await check_staff_role(interaction):
             return
 
         await interaction.response.defer(ephemeral=True)
@@ -498,6 +514,61 @@ class CloseActionView(ui.View):
         await interaction.followup.send("Ticket reopened.", ephemeral=True)
 
 
+class CloseRequestView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(
+        label="Approve & Close",
+        style=discord.ButtonStyle.danger,
+        custom_id="ticket_close_request_button",
+    )
+    async def approve_close(self, interaction: discord.Interaction, button: ui.Button):
+        bot: TicketBot = interaction.client
+        if not await check_staff_role(interaction):
+            return
+        ticket = await bot.db.get_ticket_by_channel(interaction.channel_id)
+        if not ticket:
+            await interaction.response.send_message(
+                "This is not a ticket channel.", ephemeral=True
+            )
+            return
+        if ticket["status"] == "closed":
+            await interaction.response.send_message(
+                "This ticket is already closed.", ephemeral=True
+            )
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        await bot.db.close_ticket(ticket["id"])
+        await bot.db.add_ticket_log(ticket["id"], "close", interaction.user.id)
+
+        channel = interaction.channel
+        creator = interaction.guild.get_member(ticket["creator_id"])
+        if creator:
+            await channel.set_permissions(
+                creator, view_channel=True, send_messages=False
+            )
+
+        transcript_channel_id = bot.config_manager.get_transcript_channel()
+        if transcript_channel_id:
+            transcript_channel = interaction.guild.get_channel(transcript_channel_id)
+            if transcript_channel:
+                embed = await build_ticket_summary(bot, ticket, interaction.guild)
+                await transcript_channel.send(embed=embed)
+
+        stats_cog = bot.get_cog("StatsCog")
+        if stats_cog:
+            await stats_cog.update_stats(interaction.guild)
+
+        await interaction.message.edit(view=None)
+
+        await channel.delete(
+            reason=f"Ticket closed by {interaction.user} via close request"
+        )
+
+
 class CreateTicketButton(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -636,6 +707,7 @@ class TicketsCog(commands.Cog):
         self.bot.add_view(CreateTicketButton())
         self.bot.add_view(TicketActionView())
         self.bot.add_view(CloseActionView())
+        self.bot.add_view(CloseRequestView())
         categories = self.bot.config_manager.get_categories()
         if categories:
             self.bot.add_view(TicketCategoryView(categories))

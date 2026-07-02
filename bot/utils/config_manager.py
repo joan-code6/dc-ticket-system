@@ -63,6 +63,9 @@ class ConfigManager:
     def get_categories(self) -> Dict[str, Any]:
         return self.config.get("categories", {})
 
+    def get_category_names(self) -> list:
+        return list(self.config.get("categories", {}).keys())
+
     def set_category(
         self,
         name: str,

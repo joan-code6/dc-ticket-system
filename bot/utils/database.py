@@ -403,6 +403,13 @@ class Database:
             rows = await cursor.fetchall()
             return [dict(row) for row in rows]
 
+    async def update_ticket_category(self, ticket_id: int, new_category: str):
+        await self.conn.execute(
+            "UPDATE tickets SET category = ? WHERE id = ?",
+            (new_category, ticket_id),
+        )
+        await self.conn.commit()
+
     async def update_ticket_reminder(self, ticket_id: int, timestamp: str):
         await self.conn.execute(
             "UPDATE tickets SET last_reminder_at = ? WHERE id = ?",

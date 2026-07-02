@@ -30,7 +30,6 @@ class ModerationCog(commands.Cog):
                     mentions = " ".join(f"<@{uid}>" for uid in assigned_ids)
                 else:
                     mentions = "None"
-                # Update assigned field
                 for i, field in enumerate(embed.fields):
                     if field.name == "Assigned":
                         embed.set_field_at(i, name="Assigned", value=mentions, inline=False)
@@ -39,6 +38,26 @@ class ModerationCog(commands.Cog):
                         except discord.HTTPException:
                             pass
                         return
+
+    async def _update_embed_category(self, channel: discord.TextChannel, new_category: str):
+        async for msg in channel.history(limit=50):
+            if msg.embeds and msg.embeds[0].title and msg.embeds[0].title.startswith("Ticket #"):
+                embed = msg.embeds[0]
+                for i, field in enumerate(embed.fields):
+                    if field.name == "Category":
+                        embed.set_field_at(i, name="Category", value=new_category, inline=True)
+                        try:
+                            await msg.edit(embed=embed)
+                        except discord.HTTPException:
+                            pass
+                        return
+
+    async def _move_category_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        categories = self.bot.config_manager.get_category_names()
+        matches = [c for c in categories if current.lower() in c.lower()]
+        return [app_commands.Choice(name=c[:100], value=c[:100]) for c in matches[:25]]
 
     async def _refresh_stats(self, guild: discord.Guild):
         stats_cog = self.bot.get_cog("StatsCog")
