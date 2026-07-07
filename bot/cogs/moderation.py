@@ -244,6 +244,31 @@ class ModerationCog(commands.Cog):
             view=CloseActionView()
         )
 
+    @app_commands.command(name="reopen", description="Reopen a closed ticket")
+    @app_commands.check(has_staff_role)
+    async def reopen(self, interaction: discord.Interaction):
+        ticket = await self._get_ticket(interaction)
+        if not ticket:
+            return
+        if ticket["status"] != "closed":
+            await interaction.response.send_message("This ticket is not closed.", ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        await self.bot.db.reopen_ticket(ticket["id"])
+        await self.bot.db.add_ticket_log(ticket["id"], "reopen", interaction.user.id)
+
+        channel = interaction.channel
+        creator = interaction.guild.get_member(ticket["creator_id"])
+        if creator:
+            await channel.set_permissions(creator, view_channel=True, send_messages=True)
+
+        await self._refresh_stats(interaction.guild)
+
+        await interaction.followup.send("Ticket reopened.", ephemeral=True)
+        await channel.send(f"🔓 Ticket reopened by {interaction.user.mention}.")
+
     @app_commands.command(name="rename", description="Rename this ticket channel")
     @app_commands.describe(name="New channel name")
     @app_commands.check(has_staff_role)
