@@ -710,6 +710,8 @@ class TicketsCog(commands.Cog):
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
         if not after.guild:
             return
+        if after.author.bot:
+            return
         ticket = await self.bot.db.get_ticket_by_channel(after.channel.id)
         if not ticket:
             return
