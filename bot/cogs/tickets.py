@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 from utils.archive import archive_single_attachment
 from utils.checks import check_staff_role
 from utils import ai
+from cogs.transcripts import TranscriptSummaryView
 
 
 def _format_discord_time(ts_str: str | None) -> str | None:
@@ -137,14 +138,15 @@ class TicketCategorySelect(ui.Select):
 
         if not questions:
             await interaction.response.defer(ephemeral=True)
-            await self.create_ticket(interaction, category, {})
+            await self.create_ticket(interaction, category, {}, questions)
             return
 
         modal = TicketQuestionsModal(category, questions, self.create_ticket)
         await interaction.response.send_modal(modal)
 
     async def create_ticket(
-        self, interaction: discord.Interaction, category: str, answers: dict
+        self, interaction: discord.Interaction, category: str, answers: dict,
+        questions: list | None = None
     ):
         bot: TicketBot = interaction.client
         cfg = bot.config_manager.get_category(category)
@@ -211,7 +213,7 @@ class TicketCategorySelect(ui.Select):
         embed.add_field(name="Assigned", value="None", inline=False)
         if answers:
             for q, a in answers.items():
-                embed.add_field(name=q, value=a or "No answer", inline=False)
+                embed.add_field(name=q[:256], value=a or "No answer", inline=False)
 
         msg = await channel.send(
             content=f"{role.mention} {creator.mention}",
@@ -220,7 +222,17 @@ class TicketCategorySelect(ui.Select):
         )
 
         opening_lines = [f"**Ticket #{ticket_id} opened**", f"Category: {category}"]
-        if answers:
+        if questions:
+            opening_lines.append("")
+            opening_lines.append("**Starting Questions:**")
+            for i, q in enumerate(questions):
+                q_text = q.get("text", "") if isinstance(q, dict) else q
+                answer = answers.get(q_text)
+                if answer:
+                    opening_lines.append(f"**{q_text}**: {answer}")
+                else:
+                    opening_lines.append(f"**{q_text}**: [Not asked]")
+        elif answers:
             opening_lines.append("")
             for q, a in answers.items():
                 opening_lines.append(f"**{q}**: {a or 'No answer'}")
@@ -257,6 +269,7 @@ class TicketQuestionsModal(ui.Modal):
         name = label_match.group(2) if label_match else category
         super().__init__(title=f"{name} Ticket")
         self.category = category
+        self.questions = questions
         self.on_submit_callback = on_submit_callback
         self.question_map = {}
         for i, q in enumerate(questions[:5]):
@@ -276,7 +289,7 @@ class TicketQuestionsModal(ui.Modal):
             text_input = ui.TextInput(
                 label=label, style=style, required=required, custom_id=f"q{i}"
             )
-            self.question_map[f"q{i}"] = label
+            self.question_map[f"q{i}"] = text
             self.add_item(text_input)
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -285,7 +298,7 @@ class TicketQuestionsModal(ui.Modal):
             if isinstance(child, ui.TextInput):
                 answers[self.question_map[child.custom_id]] = child.value
         await interaction.response.defer(ephemeral=True)
-        await self.on_submit_callback(interaction, self.category, answers)
+        await self.on_submit_callback(interaction, self.category, answers, self.questions)
 
 
 class TicketActionView(ui.View):
@@ -466,7 +479,7 @@ class CloseActionView(ui.View):
             transcript_channel = interaction.guild.get_channel(transcript_channel_id)
             if transcript_channel:
                 embed = await build_ticket_summary(bot, ticket, interaction.guild)
-                await transcript_channel.send(embed=embed)
+                await transcript_channel.send(embed=embed, view=TranscriptSummaryView())
 
         await channel.delete(reason=f"Ticket deleted by {interaction.user}")
 
@@ -572,7 +585,7 @@ class CloseRequestView(ui.View):
             if transcript_channel:
                 try:
                     embed = await build_ticket_summary(bot, ticket, interaction.guild)
-                    await transcript_channel.send(embed=embed)
+                    await transcript_channel.send(embed=embed, view=TranscriptSummaryView())
                 except Exception:
                     pass
 
@@ -726,6 +739,7 @@ class TicketsCog(commands.Cog):
         self.bot.add_view(TicketActionView())
         self.bot.add_view(CloseActionView())
         self.bot.add_view(CloseRequestView())
+        self.bot.add_view(TranscriptSummaryView())
         categories = self.bot.config_manager.get_categories()
         if categories:
             self.bot.add_view(TicketCategoryView(categories))

@@ -4,12 +4,89 @@ from discord.ext import commands
 from typing import TYPE_CHECKING, Optional
 from datetime import datetime
 import json
+import re
 
 if TYPE_CHECKING:
     from main import TicketBot
 
 from utils.checks import has_staff_role
 from utils.date_parser import parse_date_input, get_date_choices
+
+
+async def render_transcript_pages(bot: "TicketBot", ticket_id: int) -> list[discord.Embed] | None:
+    messages = await bot.db.get_transcript_messages(ticket_id)
+    if not messages:
+        return None
+
+    pages = []
+    chunk = []
+    chunk_size = 0
+    for msg in messages:
+        ts = msg['timestamp']
+        msg_dt = datetime.fromisoformat(ts) if isinstance(ts, str) else datetime.utcfromtimestamp(ts)
+        content = msg['content'] or '[empty]'
+        line = f"**[{msg['author_name']}]** <t:{int(msg_dt.timestamp())}:t>: {content}"
+        if msg['attachments_json']:
+            attachments = json.loads(msg['attachments_json'])
+            if attachments:
+                line += f"\nAttachments: {', '.join(attachments)}"
+        line += "\n"
+
+        if chunk_size + len(line) > 3900:
+            embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
+            pages.append(embed)
+            chunk = [line]
+            chunk_size = len(line)
+        else:
+            chunk.append(line)
+            chunk_size += len(line)
+
+    if chunk:
+        embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
+        pages.append(embed)
+
+    return pages
+
+
+class TranscriptSummaryView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="View Transcript",
+        style=discord.ButtonStyle.secondary,
+        emoji="📄",
+        custom_id="transcript_summary_view_button",
+    )
+    async def view_transcript(self, interaction: discord.Interaction, button: discord.ui.Button):
+        message = interaction.message
+        if not message.embeds:
+            await interaction.response.send_message("Cannot find ticket info.", ephemeral=True)
+            return
+
+        embed_title = message.embeds[0].title or ""
+        match = re.match(r"Ticket #(\d+)", embed_title)
+        if not match:
+            await interaction.response.send_message("Cannot find ticket info.", ephemeral=True)
+            return
+
+        ticket_id = int(match.group(1))
+
+        bot: TicketBot = interaction.client
+        ticket = await bot.db.get_ticket_by_id(ticket_id)
+        if not ticket:
+            await interaction.response.send_message("Ticket not found.", ephemeral=True)
+            return
+
+        pages = await render_transcript_pages(bot, ticket_id)
+        if pages is None:
+            await interaction.response.send_message("No transcript messages found.", ephemeral=True)
+            return
+
+        if len(pages) == 1:
+            await interaction.response.send_message(embed=pages[0], ephemeral=True)
+        else:
+            await interaction.response.send_message(embed=pages[0], view=TranscriptView(pages, ticket_id), ephemeral=True)
 
 
 class TranscriptView(discord.ui.View):
@@ -121,37 +198,10 @@ class TranscriptsCog(commands.Cog):
             await interaction.response.send_message("Ticket not found.", ephemeral=True)
             return
 
-        messages = await self.bot.db.get_transcript_messages(ticket_id)
-        if not messages:
+        pages = await render_transcript_pages(self.bot, ticket_id)
+        if pages is None:
             await interaction.response.send_message("No transcript messages found.", ephemeral=True)
             return
-
-        pages = []
-        chunk = []
-        chunk_size = 0
-        for msg in messages:
-            ts = msg['timestamp']
-            msg_dt = datetime.fromisoformat(ts) if isinstance(ts, str) else datetime.utcfromtimestamp(ts)
-            content = msg['content'] or '[empty]'
-            line = f"**[{msg['author_name']}]** <t:{int(msg_dt.timestamp())}:t>: {content}"
-            if msg['attachments_json']:
-                attachments = json.loads(msg['attachments_json'])
-                if attachments:
-                    line += f"\nAttachments: {', '.join(attachments)}"
-            line += "\n"
-
-            if chunk_size + len(line) > 3900:
-                embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
-                pages.append(embed)
-                chunk = [line]
-                chunk_size = len(line)
-            else:
-                chunk.append(line)
-                chunk_size += len(line)
-
-        if chunk:
-            embed = discord.Embed(title=f"Transcript #{ticket_id}", description="".join(chunk), color=discord.Color.greyple())
-            pages.append(embed)
 
         if len(pages) == 1:
             await interaction.response.send_message(embed=pages[0], ephemeral=True)
