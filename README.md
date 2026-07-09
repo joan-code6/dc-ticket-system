@@ -28,14 +28,20 @@ A full-featured ticket system built with `discord.py`. Create tickets via a butt
   - [Removing users](#removing-users)
   - [Renaming the ticket](#renaming-the-ticket)
   - [Closing a ticket](#closing-a-ticket)
+  - [Reopening a ticket](#reopening-a-ticket)
+  - [Moving a ticket to a different category](#moving-a-ticket-to-a-different-category)
+  - [AI-powered commands](#ai-powered-commands)
 - [Inactivity Reminders](#inactivity-reminders)
+- [AI Features](#ai-features)
 - [Transcripts](#transcripts)
   - [Searching transcripts](#searching-transcripts)
   - [Viewing transcripts](#viewing-transcripts)
+  - [View Transcript from summary](#view-transcript-from-summary)
 - [Stats Channel](#stats-channel)
   - [Main panel](#main-panel)
   - [Interaction leaderboard](#interaction-leaderboard)
   - [Claims leaderboard](#claims-leaderboard)
+  - [Messages leaderboard](#messages-leaderboard)
 - [Dashboard](#dashboard)
 
 ---
@@ -105,10 +111,11 @@ Posts the main "Create Ticket" button to a channel. Users click this to open a t
 
 ### 4. Set up the stats channel
 
-Creates three pinned messages in a dedicated stats channel:
+Creates four pinned messages in a dedicated stats channel:
 - A live **open tickets & staff loads** panel
 - An **interaction leaderboard** with buttons to cycle between Today / Week / Month / All-Time
 - A **claims leaderboard** tracking how many tickets each staff member has claimed
+- A **messages leaderboard** tracking total messages sent by each staff member
 
 ```
 /setup stats channel:<#channel>
@@ -118,7 +125,7 @@ Creates three pinned messages in a dedicated stats channel:
 
 ### 5. Set the archive channel
 
-When a ticket is closed, all attachments (images, files, etc.) are downloaded and re-uploaded to this channel for permanent storage. This prevents broken attachment links in transcripts after the ticket channel is deleted.
+When a ticket is created, all attachments (images, files, etc.) are automatically re-uploaded to this channel for permanent storage. This prevents broken attachment links in transcripts after the ticket channel is deleted.
 
 ```
 /setup archive channel:<#channel>
@@ -203,9 +210,11 @@ Every ticket channel includes two buttons at the top for instant access:
 | Button | Effect |
 |--------|--------|
 | **Assign to Me** | Self-assigns you to the ticket (same as `/claim`) |
-| **Close Ticket** | Closes the ticket, locks the channel, and shows Delete / Reopen buttons |
+| **Close Ticket** | If clicked by a **staff member**: immediately closes the ticket, locks the channel, and shows Delete / Reopen buttons. If clicked by the **ticket creator**: sends a close request for staff to review. |
 
 No slash command needed — just click.
+
+When a creator requests closure, a staff-only **Approve & Close** button appears. Clicking it saves the transcript, posts the summary to the transcript log channel, and deletes the channel. Staff can also close the ticket directly at any time.
 
 ### Claiming a ticket
 
@@ -281,7 +290,54 @@ Or click the **Close Ticket** button in the ticket channel.
 | **Delete** | Posts a ticket summary to the transcript log channel, archives all attachments, then permanently deletes the channel. |
 | **Reopen** | Reopens the ticket, restoring the creator's ability to send messages. |
 
-> The transcript is searchable and viewable later via `/transcript`. Attachments are only archived to permanent storage when **Delete** is clicked. The transcript log channel (if configured) receives a summary embed so staff can review closed tickets at a glance.
+> The transcript is searchable and viewable later via `/transcript`. Attachments are archived to permanent storage as soon as they're sent (not just at delete time). The transcript log channel (if configured) receives a summary embed so staff can review closed tickets at a glance.
+
+### Reopening a ticket
+
+```
+/reopen
+```
+
+Reopens a closed ticket, restoring the creator's channel permissions and updating the stats panel. Available in any closed ticket channel.
+
+### Moving a ticket to a different category
+
+```
+/move category:<category-name>
+```
+
+Moves the ticket to a different ticket category, updating the Discord category, role permissions, and the ticket embed. The `category` parameter supports autocomplete — it shows your configured categories as you type.
+
+Useful when a ticket was opened under the wrong category or when the issue scope changes.
+
+### AI-powered commands
+
+> Requires `HC_AI_API_KEY` in your `.env` file. If not set, these commands will respond with a "not configured" message.
+
+#### Summarize a ticket
+
+```
+/ai-summarize
+```
+
+Generates a structured summary of the ticket conversation using AI. The response includes:
+
+| Section | Content |
+|---------|---------|
+| **Issue** | One-line problem description |
+| **Key Points** | Important details discussed |
+| **Resolution** | Current status — resolved, in progress, or unresolved |
+| **Participants** | Who was involved |
+
+Great for getting a quick overview of a long ticket or including context when escalating.
+
+#### Rename a ticket with AI
+
+```
+/ai-rename
+```
+
+Suggests and applies a descriptive channel name based on the conversation content. The AI reads the entire ticket history and picks a concise title that summarizes the main topic. Channel names are sanitized to use only letters, numbers, and hyphens.
 
 ---
 
@@ -297,6 +353,29 @@ The bot automatically monitors assigned tickets for staff inactivity. If no staf
 
 ---
 
+## AI Features
+
+The bot integrates with Hack Club's OpenRouter proxy for AI-powered features. All AI features are **opt-in** — set the `HC_AI_API_KEY` environment variable to enable them.
+
+| Feature | Trigger | Description |
+|---------|---------|-------------|
+| Auto-rename | Automatic | When a ticket has enough conversation and no custom title yet, the AI suggests a channel name based on the discussion topic. Runs once per ticket. |
+| `/ai-rename` | Slash command | Manually triggers an AI-suggested channel rename at any time. |
+| `/ai-summarize` | Slash command | Generates a structured summary of the entire ticket conversation (Issue / Key Points / Resolution / Participants). |
+
+**Models used:**
+
+| Task | Model |
+|------|-------|
+| Title suggestions & rename | `qwen/qwen3-32b` |
+| Ticket summarization | `deepseek/deepseek-v4-flash` |
+
+All AI calls go through `https://ai.hackclub.com/proxy/v1` using the `openrouter` Python package. Only one AI operation runs per ticket at a time to avoid conflicts.
+
+If the key is not set, the bot runs normally without AI features — no errors, no warnings.
+
+---
+
 ## Transcripts
 
 Closed ticket transcripts are saved automatically in real-time as messages are sent. Edits to messages are also captured. Use the following commands to retrieve them.
@@ -309,10 +388,25 @@ Closed ticket transcripts are saved automatically in real-time as messages are s
 
 All parameters are optional — combine them to narrow results. Returns up to 25 matching tickets.
 
+**Date parameters** (`after` and `before`) support human-readable input with autocomplete:
+
+| Input | Meaning |
+|-------|---------|
+| `today` | Since midnight UTC today |
+| `yesterday` | All of yesterday |
+| `7d` or `7 days` | Last 7 days |
+| `30d` or `30 days` | Last 30 days |
+| `3h` or `3 hours` | Last 3 hours |
+| `2026-06-08` | A specific date |
+| `june 8 2026` | Natural date format |
+
+The `after` and `before` fields provide autocomplete suggestions as you type (Today, Yesterday, Last 7 days, etc.).
+
 **Examples:**
 ```
 /transcript search user:@Joan
 /transcript search category:Support after:2026-05-01
+/transcript search after:7d
 ```
 
 ### Viewing transcripts
@@ -321,11 +415,15 @@ All parameters are optional — combine them to narrow results. Returns up to 25
 /transcript view ticket_id:<id>
 ```
 
-Shows a paginated transcript of the ticket. Use the **Prev** / **Next** buttons to scroll through messages. Each message shows:
+Shows a paginated transcript of the ticket. Use the **Prev** / **Next** buttons to scroll through messages. The embed title shows **Page X/Y** so you know your position. Each message shows:
 - Author display name
 - Timestamp
 - Content
 - Attachments (if any)
+
+### View Transcript from summary
+
+When a ticket is deleted, the summary embed posted to the transcript log channel includes a **View Transcript** button. Click it to view the full transcript without needing to remember the ticket ID.
 
 ---
 
@@ -365,6 +463,10 @@ Each staff member's count is the **number of distinct tickets** they've interact
 
 The third pinned message tracks only **claim actions** (when a staff member takes ownership of a ticket). Same Today / Week / Month / All-Time cycling with the same **◀ ▶** buttons.
 
+### Messages leaderboard
+
+The fourth pinned message tracks the **total number of messages** each staff member has sent across all tickets. Same Today / Week / Month / All-Time cycling with **◀ ▶** buttons. If a staff role is configured, all staff members appear even with 0 messages.
+
 ---
 
 ## Dashboard
@@ -382,9 +484,10 @@ When a new ticket is created in a category, anyone with that category's ping rol
 
 ### Prerequisites
 
-1. Create a `.env` file in the project root with your bot token:
+1. Create a `.env` file in the project root:
    ```
    DC_TOKEN=your-bot-token-here
+   HC_AI_API_KEY=your-openrouter-key  # optional — enables AI features
    ```
 2. Ensure your bot has the following Discord intents enabled in the Developer Portal:
    - Server Members Intent
