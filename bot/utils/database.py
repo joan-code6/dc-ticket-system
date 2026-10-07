@@ -1,18 +1,26 @@
-import aiosqlite
 import json
+import os
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
+try:
+    from utils import sqlcipher_async
+except ImportError:  # tests / scripts import this module directly
+    from . import sqlcipher_async  # type: ignore
+
 DATABASE_PATH = "bot/bot.db"
+
+# Plaintext SQLite files start with this magic string; SQLCipher files do not.
+_PLAINTEXT_SQLITE_HEADER = b"SQLite format 3\x00"
 
 
 class Database:
     def __init__(self, db_path: str = DATABASE_PATH):
         self.db_path = db_path
-        self._connection: Optional[aiosqlite.Connection] = None
+        self._connection: Optional[sqlcipher_async.Connection] = None
 
     @property
-    def conn(self) -> aiosqlite.Connection:
+    def conn(self) -> sqlcipher_async.Connection:
         if self._connection is None:
             raise RuntimeError(
                 "Database connection is not established. Call connect() first."
@@ -20,8 +28,37 @@ class Database:
         return self._connection
 
     async def connect(self):
-        self._connection = await aiosqlite.connect(self.db_path)
-        self._connection.row_factory = aiosqlite.Row
+        """Open the SQLCipher-encrypted database.
+
+        The encryption key is read from the DB_ENCRYPTION_KEY environment
+        variable (set it in .env). The bot refuses to start when the key is
+        missing, when the key is wrong, or when the database file is still a
+        plaintext SQLite file - run scripts/migrate_encrypt.py once to
+        encrypt an existing database.
+        """
+        key = os.getenv("DB_ENCRYPTION_KEY")
+        if not key:
+            raise RuntimeError(
+                "DB_ENCRYPTION_KEY is not set. Generate one and add it to your "
+                ".env file (see .env.example), then restart the bot."
+            )
+        if os.path.exists(self.db_path) and os.path.getsize(self.db_path) > 0:
+            with open(self.db_path, "rb") as f:
+                header = f.read(len(_PLAINTEXT_SQLITE_HEADER))
+            if header == _PLAINTEXT_SQLITE_HEADER:
+                raise RuntimeError(
+                    f"{self.db_path} is an unencrypted SQLite database. Stop the "
+                    "bot and run: python scripts/migrate_encrypt.py "
+                    f"{self.db_path} to encrypt it in place."
+                )
+        try:
+            self._connection = await sqlcipher_async.connect(self.db_path, key)
+        except sqlcipher_async.DatabaseError as e:
+            raise RuntimeError(
+                f"Could not open {self.db_path}: the database could not be "
+                "decrypted. Check that DB_ENCRYPTION_KEY in .env matches the "
+                "key this database was encrypted with."
+            ) from e
         await self._create_tables()
 
     async def close(self):
