@@ -484,14 +484,43 @@ When a new ticket is created in a category, anyone with that category's ping rol
 
 ### Prerequisites
 
-1. Create a `.env` file in the project root:
+1. Create a `.env` file in the project root (see `.env.example`):
    ```
    DC_TOKEN=your-bot-token-here
    HC_AI_API_KEY=your-openrouter-key  # optional — enables AI features
+   DB_ENCRYPTION_KEY=your-database-key  # required — encrypts the ticket database
    ```
+   Generate a database key with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
+   or `openssl rand -base64 32`. Keep a safe copy of it: without this key the
+   database cannot be opened.
 2. Ensure your bot has the following Discord intents enabled in the Developer Portal:
    - Server Members Intent
    - Message Content Intent
+
+### Database encryption (SQLCipher)
+
+The ticket database (`bot/bot.db`) is encrypted at rest with
+[SQLCipher](https://www.zetetic.net/sqlcipher/) (AES-256). The key is read
+from `DB_ENCRYPTION_KEY` in `.env` at startup.
+
+- **Fresh installs:** nothing to do - the encrypted database is created on
+  first start.
+- **Existing plaintext database:** stop the bot, then run the one-time
+  migration:
+  ```bash
+  python scripts/migrate_encrypt.py            # migrates bot/bot.db
+  python scripts/migrate_encrypt.py path/to.db # or a custom path
+  ```
+  The migration verifies row counts, then renames the old file to
+  `bot.db.plaintext-backup` and puts the encrypted database in its place.
+  Delete the plaintext backup securely once you have confirmed the bot works.
+- The bot **refuses to start** if the key is missing, the key is wrong, or
+  the database is still unencrypted, with an error message saying what to do.
+
+Note: the key lives in `.env` on the same host as the database. This
+protects the database file itself (backups, copies, stolen disks) but not
+against someone who gains full access to the host. Treat `.env` like a
+password and never commit it.
 
 ### Linux/macOS
 
